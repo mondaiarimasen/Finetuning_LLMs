@@ -43,20 +43,11 @@ def log_ram_usage():
 #### finished wandb setup
 '''
 
-#### loading model
-
-print("\n### now loading gpt2 model and tokenizer ### ")
-# now load the pre-trained gpt2 model and tokenizer
-model_name = 'gpt2'
-model = GPT2LMHeadModel.from_pretrained(model_name)
-tokenizer = GPT2Tokenizer.from_pretrained(model_name) # gpt2 specific tokenizer
-tokenizer_name = 'gpt2-tokenizer'
-
-# Set the padding token (to existing special token, the end of sentence token)
-tokenizer.pad_token = tokenizer.eos_token
-
-#### finished loading model
-
+dataset_name = 'wikitext'
+dataset_config = 'wikitext-103-v1'
+dataset_path_head = os.getcwd()
+home_dir = os.getcwd()
+dataset_filename = '/wikitext-103-raw-v1'
 
 
 #### creating input_id and attention_masks tensors 
@@ -78,12 +69,7 @@ def load_or_fetch_wikitext(dataset_name, dataset_config, dataset_path):
     print("Dataset downloaded and saved.")
     return dataset
 
-# Example usage
-dataset_name = 'wikitext'
-dataset_config = 'wikitext-103-v1'
-dataset_path_head = os.getcwd()
-home_dir = os.getcwd()
-dataset_filename = '/wikitext-103-raw-v1'
+
 dataset = load_or_fetch_wikitext(dataset_name, dataset_config, dataset_path_head + dataset_filename)
 
 print(dataset)
@@ -99,28 +85,11 @@ def filter_empty_texts(examples):
     return bool(examples['text'].strip())
 
 
-clean_dataset_path = dataset_path_head + "/" + dataset_config + "-clean-dataset.json"
-
-# (1/18/2024) Having problems with saving and loading the dataset, ignoring that for now and re-filtering each time instead
-
-# check if the cleaned dataset json file exists
-if os.path.exists(clean_dataset_path): # if clean dataset already exists
-  print(f"\nClean dataset exists and loading...")
-  dataset = load_dataset(clean_dataset_path)
-  print(f"Finished loading clean dataset")
-  print(dataset)
-
-else:
-  print("\nClean dataset does not exist and filtering empty text...")
-  for key in dataset.keys():
-    print(f"Cleaning {key} dataset")
-    dataset[key] = dataset[key].filter(filter_empty_texts)
-    print(f"Finished cleaning {key} dataset")
-
-  # Save the dataset to a JSON file
-  print(f"Saving cleaned dataset...")
-  #dataset.save_to_disk(clean_dataset_path)
-  print(f"Finished saving")
+print("\nClean dataset does not exist and filtering empty text...")
+for key in dataset.keys():
+  print(f"Cleaning {key} dataset")
+  dataset[key] = dataset[key].filter(filter_empty_texts)
+  print(f"Finished cleaning {key} dataset")
 
 
 # check results
@@ -129,8 +98,6 @@ for split, ds in dataset.items():
     print(f"{split} dataset: {len(ds)} rows after filtering")
 
 # viewing first few elements
-#print(dataset['train'][:5]['text'])
-#print(dataset['validation'][:5]['text'])
 print("dataset['test']['text'][:5]: ", dataset['test']['text'][:5])
 # 
 
@@ -138,8 +105,10 @@ print("dataset['test']['text'][:5]: ", dataset['test']['text'][:5])
 
 print("\n### Create the directory to save if it does not exist ###")
 # Create the directory if it does not exist
-directory = home_dir + "/" + dataset_config + "-" + model_name + "-filtered-text-lists"
+directory = home_dir + "/" + dataset_config + "-filtered-text-lists"
 os.makedirs(directory, exist_ok=True)
+
+keys = []
 
 key = "validation"
 print("key: ", key)
