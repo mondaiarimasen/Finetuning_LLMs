@@ -108,7 +108,6 @@ print("\n### Create the directory to save if it does not exist ###")
 directory = home_dir + "/" + dataset_config + "-filtered-text-lists"
 os.makedirs(directory, exist_ok=True)
 
-keys = []
 
 key = "validation"
 print("key: ", key)
