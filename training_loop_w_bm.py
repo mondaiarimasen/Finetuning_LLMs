@@ -20,7 +20,7 @@ print("\n### defining variables ###")
 batch_size = 32 # adjust based on GPU memory
 epochs = 3 # number of training epochs
 learning_rate = 3e-5
-batch_max = 3300
+batch_max = 3300 # use None if want to run on all batches
 
 suffix = "-bs-" + str(batch_size) + "-e-" + str(epochs) + "-lr-" + format(learning_rate, '.0e') + "-bm-" + str(batch_max)
 
@@ -128,89 +128,89 @@ print("len_dataloader_validation: ", len_dataloader_validation)
 for epoch in range(epochs):
     log_ram_usage()
     total_loss = 0
-    batch_num = 1
+    #batch_num = 1
     #print("\nbatch_num: ", batch_num)
-    for batch in tqdm(dataloader['train'], desc=f"Epoch {epoch+1}/{epochs}"):
+    for batch in tqdm(dataloader['train'][:batch_max], desc=f"Epoch {epoch+1}/{epochs}"):
         log_ram_usage()
         #print("in batch loop before if")
-        if batch_num <= batch_max:
-            
-            #if batch_num == 1:
-            #   print("in batch loop")
-            
-            # only need to move to device if I'm not using DataParallel
-            #input_ids, attention_mask = [item.to(device) for item in batch]
-            
-            input_ids, attention_mask = [item for item in batch]
-            input_ids = input_ids.long()
-            attention_mask = attention_mask.long()
+        #if batch_num <= batch_max:
+        
+        #if batch_num == 1:
+        #   print("in batch loop")
+        
+        # only need to move to device if I'm not using DataParallel
+        #input_ids, attention_mask = [item.to(device) for item in batch]
+        
+        input_ids, attention_mask = [item for item in batch]
+        input_ids = input_ids.long()
+        attention_mask = attention_mask.long()
 
-            log_ram_usage()
+        log_ram_usage()
 
-            #print("input_ids.shape: ", input_ids.shape) 
-            #print("type(input_ids): ", type(input_ids))
-            #print("input_ids.dtype: ", input_ids.dtype)
-            
-            #print("computing labels")
-            labels = torch.cat((input_ids[:, 1:], torch.tensor([[-100]] * input_ids.size(0))), dim=1)
-            # labels is the tensor of token indices (input_ids) shifted by 
-            # one position to the left, with -100 appended to the end of 
-            # each sequence to signal that there is no prediction to be made for the last token.
-            # -100 is used because this is the ignore_index of cross entropy loss function (which is what outputs.loss computes) 
-            # so any target label with the value -100 will not contribute to the loss, see https://pytorch.org/docs/stable/generated/torch.nn.CrossEntropyLoss.html
+        #print("input_ids.shape: ", input_ids.shape) 
+        #print("type(input_ids): ", type(input_ids))
+        #print("input_ids.dtype: ", input_ids.dtype)
+        
+        #print("computing labels")
+        labels = torch.cat((input_ids[:, 1:], torch.tensor([[-100]] * input_ids.size(0))), dim=1)
+        # labels is the tensor of token indices (input_ids) shifted by 
+        # one position to the left, with -100 appended to the end of 
+        # each sequence to signal that there is no prediction to be made for the last token.
+        # -100 is used because this is the ignore_index of cross entropy loss function (which is what outputs.loss computes) 
+        # so any target label with the value -100 will not contribute to the loss, see https://pytorch.org/docs/stable/generated/torch.nn.CrossEntropyLoss.html
 
-            # need to make sure the tensors being passed into embedding 
-            # layer are long or ints since in PyTorch, embedding layers 
-            # are used to retrieve embeddings from an embedding matrix, 
-            # and they require the indices to be integers because these 
-            # indices are used to look up specific rows in the embedding matrix. 
-            labels = labels.long() 
-            
-            log_ram_usage()
-            #print("feeding into model")
-            
-            # (overall idea: model performs a forward pass with the given inputs and calculates the loss
-            # using the provided labels (which are input ids))
-            # according to wandb, the following line takes around 20G RAM to run
-            outputs = model(input_ids=input_ids, attention_mask=attention_mask, labels = labels)
-            log_ram_usage()
+        # need to make sure the tensors being passed into embedding 
+        # layer are long or ints since in PyTorch, embedding layers 
+        # are used to retrieve embeddings from an embedding matrix, 
+        # and they require the indices to be integers because these 
+        # indices are used to look up specific rows in the embedding matrix. 
+        labels = labels.long() 
+        
+        log_ram_usage()
+        #print("feeding into model")
+        
+        # (overall idea: model performs a forward pass with the given inputs and calculates the loss
+        # using the provided labels (which are input ids))
+        # according to wandb, the following line takes around 20G RAM to run
+        outputs = model(input_ids=input_ids, attention_mask=attention_mask, labels = labels)
+        log_ram_usage()
 
-            # output from model is a complex object containing various items, one of which is the loss,
-            # representing how far off the model's predictions were from the actual values (the labels)
-            #print("computing outputs.loss")
-            loss = outputs.loss
+        # output from model is a complex object containing various items, one of which is the loss,
+        # representing how far off the model's predictions were from the actual values (the labels)
+        #print("computing outputs.loss")
+        loss = outputs.loss
 
-            # checking loss shape since it might be a vector of length the number of gpus i'm using
-            #print("loss.shape: ", loss.shape)
-            #print("loss: ", loss)
+        # checking loss shape since it might be a vector of length the number of gpus i'm using
+        #print("loss.shape: ", loss.shape)
+        #print("loss: ", loss)
 
-            #print("taking mean of outputs if outputs.ndim>0, else just returning outputs")
-            loss = loss.mean() if loss.ndim > 0 else loss
-            
-            total_loss += loss.item()
-            
-            log_ram_usage()
-            # do backpropagation, computing the gradient of the loss with respect to each weight
-            #print("doing backpropagation")
-            loss.backward()
-            log_ram_usage()
-            # optimizer updates the weights based on the gradients calculated during backpropagation
-            #print("updating weights using optimizer")
-            optimizer.step()
-            # gradients are reset for the next batch
-            #print("resetting gradients")
-            optimizer.zero_grad()
-            #print(f"done with batch {batch_num} in epoch {epoch}")
-            #print(f"Epoch: {epoch}, Loss (in batch): {loss.item()}")
-            batch_num+=1
-            #wandb.log({"epoch": epoch, "loss": loss.item()})
+        #print("taking mean of outputs if outputs.ndim>0, else just returning outputs")
+        loss = loss.mean() if loss.ndim > 0 else loss
+        
+        total_loss += loss.item()
+        
+        log_ram_usage()
+        # do backpropagation, computing the gradient of the loss with respect to each weight
+        #print("doing backpropagation")
+        loss.backward()
+        log_ram_usage()
+        # optimizer updates the weights based on the gradients calculated during backpropagation
+        #print("updating weights using optimizer")
+        optimizer.step()
+        # gradients are reset for the next batch
+        #print("resetting gradients")
+        optimizer.zero_grad()
+        #print(f"done with batch {batch_num} in epoch {epoch}")
+        #print(f"Epoch: {epoch}, Loss (in batch): {loss.item()}")
+        #batch_num+=1
+        #wandb.log({"epoch": epoch, "loss": loss.item()})
 
-            #else:
-            #    print("breaking out of batch loop on batch ", batch_num)
-            #    break
-        else:
-            print(f"reached batch_max of {batch_max}")
-            break
+        #else:
+        #    print("breaking out of batch loop on batch ", batch_num)
+        #    break
+        #else:
+        #    print(f"reached batch_max of {batch_max}")
+        #    break
 
     print("out of batch loop")
 
@@ -227,7 +227,7 @@ for epoch in range(epochs):
     model.eval()
     total_eval_loss = 0
     with torch.no_grad():
-        for batch in tqdm(dataloader['validation'], desc=f"batch loop for validation"):
+        for batch in tqdm(dataloader['validation'][:batch_max], desc=f"batch loop for validation"):
             input_ids, attention_mask = [item for item in batch]
             input_ids = input_ids.long()
             attention_mask = attention_mask.long()
