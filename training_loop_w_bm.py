@@ -17,7 +17,6 @@ get_cuda_info()
 
 print("\n### defining variables ###")
 #### variables
-# define training parameters
 batch_size = 32 # adjust based on GPU memory
 epochs = 3 # number of training epochs
 learning_rate = 3e-5
@@ -87,7 +86,7 @@ test_tokens = load_clean_tokens(clean_token_dir, "test")
 
 #### constructing tokenized_datasets_pt
 
-keys = ['train']
+keys = ['train', 'validation']
 tokenized_datasets_pt = get_tokenized_datasets_pt(keys, clean_token_dir, filtered_text_dir)
 # tokenized_datasets_pt is dict structure {'test' : {}, 'train': {}, 'validation': {}}
 # and for each key of tokenized_datasets_pt, tokenized_datasets_pt[key] 
@@ -97,7 +96,7 @@ tokenized_datasets_pt = get_tokenized_datasets_pt(keys, clean_token_dir, filtere
 
 print("\n batch_size: ", batch_size)
 
-dataloader = get_dataloader(batch_size, tokenized_datasets_pt)
+dataloader = get_dataloader(batch_size, tokenized_datasets_pt) # this has the same keys as tokenized_datasets_pt
 
 ####
 
@@ -119,13 +118,19 @@ model.to(device) # move model to device
 
 model.train() # tell model it's in training mode
 
+len_dataloader_train = len(dataloader['train'])
+print("len_dataloader_train: ", len_dataloader_train)
+
+len_dataloader_validation = len(dataloader['validation'])
+print("len_dataloader_validation: ", len_dataloader_validation)
+
 # training loop
 for epoch in range(epochs):
     log_ram_usage()
     total_loss = 0
     batch_num = 1
     #print("\nbatch_num: ", batch_num)
-    for batch in tqdm(dataloader['train'], desc=f"Epoch {epoch+1}/{epochs}"):#tokenized_datasets["train"]:
+    for batch in tqdm(dataloader['train'], desc=f"Epoch {epoch+1}/{epochs}"):
         log_ram_usage()
         #print("in batch loop before if")
         if batch_num <= batch_max:
@@ -140,57 +145,32 @@ for epoch in range(epochs):
             input_ids = input_ids.long()
             attention_mask = attention_mask.long()
 
-
             log_ram_usage()
 
-            # tokenizer(batch["text"]): tokenize text data in batch:
-            # return_tensors = "pt": return the tokens as pytorch tensors ("pt" stands for pytorch, "tf" stands for tensorflow)
-            # padding = True: ensures all tokenized sequences in batch have same length by padding shorter sequences with a special token
-            # (need to pad when batching together sequences of different lengths so that they can be represented as a single tensor)
-            # truncation = True: truncates the sequences to a max_length; it's important since gpt2 has a fixed length input size it can handle
-            #inputs = tokenizer(batch["text"],return_tensors = "pt",padding = True, truncation = True, max_length = 512)
-            
             #print("input_ids.shape: ", input_ids.shape) 
             #print("type(input_ids): ", type(input_ids))
             #print("input_ids.dtype: ", input_ids.dtype)
             
-
-            # iterates through key-value pairs in inputs dictionary
-            # moves value (which is a tensor) to same device as the model to so model can process the inputs
-            # (will get an error if inputs and model are on different devices)
-            #inputs = {k: v.to(device) for k,v in inputs.items()}
-
-            #inputs = {k: v.to(device) for k,v in batch.items()}
             #print("computing labels")
             labels = torch.cat((input_ids[:, 1:], torch.tensor([[-100]] * input_ids.size(0))), dim=1)
-            # need to make sure the tensors being passed into embedding 
-            # layer are long or ints since in PyTorch, embedding layers 
-            # are used to retrieve embeddings from an embedding matrix, 
-            # and they require the indices to be integers because these 
-            # indices are used to look up specific rows in the embedding matrix. 
-            labels = labels.long() 
-            #print("labels.size: ", labels.shape)
-            #print("type(labels): ", type(labels))
-            #print("labels.dtype: ", labels.dtype)
             # labels is the tensor of token indices (input_ids) shifted by 
             # one position to the left, with -100 appended to the end of 
             # each sequence to signal that there is no prediction to be made for the last token.
             # -100 is used because this is the ignore_index of cross entropy loss function (which is what outputs.loss computes) 
             # so any target label with the value -100 will not contribute to the loss, see https://pytorch.org/docs/stable/generated/torch.nn.CrossEntropyLoss.html
 
-
-            # passes tokenized and formatted inputs into model
-            # **inputs: unpacks the dictionary into keyword arguments, i.e. passing all items in
-            # inputs dictionary (like input ids, attention masks, etc.) as separate arguments to the model
-            # labels = inputs["input_ids"]: for gpt2, labels are usually the same as input ids, just shifted.
-            # by predicting the next token in the sequence, the model learns to generate text.
-            # here, we are explicitly providing these input IDs as labels for the model to compare its predictions against.
-            # (overall idea: model performs a forward pass with the given inputs and calculates the loss
-            # using the provided labels (which are input ids))
-            #outputs = model(**inputs)#, labels = inputs["input_ids"])
+            # need to make sure the tensors being passed into embedding 
+            # layer are long or ints since in PyTorch, embedding layers 
+            # are used to retrieve embeddings from an embedding matrix, 
+            # and they require the indices to be integers because these 
+            # indices are used to look up specific rows in the embedding matrix. 
+            labels = labels.long() 
+            
             log_ram_usage()
             #print("feeding into model")
             
+            # (overall idea: model performs a forward pass with the given inputs and calculates the loss
+            # using the provided labels (which are input ids))
             # according to wandb, the following line takes around 20G RAM to run
             outputs = model(input_ids=input_ids, attention_mask=attention_mask, labels = labels)
             log_ram_usage()
@@ -206,12 +186,7 @@ for epoch in range(epochs):
 
             #print("taking mean of outputs if outputs.ndim>0, else just returning outputs")
             loss = loss.mean() if loss.ndim > 0 else loss
-
-
-            #print("loss.shape: ", loss.shape)
-            #print("loss: ", loss)
-
-            # add loss for this batch to total_loss
+            
             total_loss += loss.item()
             
             log_ram_usage()
@@ -239,14 +214,58 @@ for epoch in range(epochs):
 
     print("out of batch loop")
 
-    avg_train_loss = total_loss / len(dataloader['train'])
+    avg_train_loss = total_loss / len_dataloader_train
     wandb.log({"avg_train_loss": avg_train_loss})
 
 
-    print(f"Epoch {epoch+1}/{epochs}, Total Loss: {total_loss}, avg train loss: {avg_train_loss}")
-    wandb.log({"epoch": epoch, "total loss per epoch": total_loss})
+    print(f"Epoch {epoch+1}/{epochs}, avg train loss: {avg_train_loss}")
+    wandb.log({"epoch": epoch})
 
-print("-----finished training-----")
+
+
+    # Validation after each trainig epoch
+    model.eval()
+    total_eval_loss = 0
+    with torch.no_grad():
+        for batch in tqdm(dataloader['validation'], desc=f"batch loop for validation"):
+            input_ids, attention_mask = [item for item in batch]
+            input_ids = input_ids.long()
+            attention_mask = attention_mask.long()
+
+            log_ram_usage()
+
+            labels = torch.cat((input_ids[:, 1:], torch.tensor([[-100]] * input_ids.size(0))), dim=1)
+
+            labels = labels.long() 
+            log_ram_usage()
+
+            outputs = model(input_ids=input_ids, attention_mask=attention_mask, labels = labels)
+            loss = outputs.loss
+            
+            #print("taking mean of outputs if outputs.ndim>0, else just returning outputs")
+            loss = loss.mean() if loss.ndim > 0 else loss
+
+            total_eval_loss += loss.item()
+
+            log_ram_usage()
+    
+    # Calculate average loss over the validation data
+    avg_val_loss = total_eval_loss / len_dataloader_validation
+    print(f'Epoch {epoch+1} validation loss: {avg_val_loss}')
+    wandb.log({"avg_val_loss": avg_val_loss})
+
+    # Calculate the perplexity based on the mean validation loss
+    validation_perplexity = torch.exp(torch.tensor(avg_val_loss))
+    print(f'Epoch {epoch+1} validation perplexity: {validation_perplexity}')
+    wandb.log({"validation perplexity": validation_perplexity})
+
+
+    # Reset model to training mode
+    model.train()
+
+
+
+print("-----finished training and validation-----")
 
 #print("finishing wandb")
 #wandb.finish()
