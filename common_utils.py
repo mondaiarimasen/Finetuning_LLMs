@@ -9,6 +9,55 @@ from torch import Tensor
 import torch.nn as nn
 from torch.utils.data import DataLoader, TensorDataset
 import math
+from collections import deque
+from glob import glob
+
+
+
+#### checkpoints
+
+# define checkpoints directory, returns an empty queue to keep track of checkpoints
+def init_checkpoints_dir_queue(checkpoint_dir):
+    # Define the directory to save checkpoints
+    os.makedirs(checkpoint_dir, exist_ok=True)
+
+    # Keep track of checkpoints using a deque to maintain the 5 most recent ones
+    return deque()
+
+# save checkpoints, and make sure there are at most num_checkpoint number of checkpoints in directory at most; num_checkpoint is default 5
+def save_checkpoint(checkpoint_dict: Dict, filename: str, checkpoints_queue,num_checkpoint = 5):
+    print("\n attempting to save checkpoint at ", filename)
+    torch.save(checkpoint_dict, filename)
+    print("successfully saved checkpoint_dict at ", filename)
+    # Append the new checkpoint and remove the oldest if the limit is exceeded
+    checkpoints_queue.append(filename)
+    if len(checkpoints_queue) > num_checkpoint:
+        oldest_checkpoint = checkpoints_queue.popleft()
+        print("removed oldest checkpoint from queue")
+        try:
+            os.remove(oldest_checkpoint)
+            print("removed oldest checkpoint file: ", oldest_checkpoint)
+        except OSError:
+            print("couldn't remove oldest_checkpoint")
+            sys.exit()
+
+# Function to load the latest checkpoint, returns the checkpoint or None
+def load_latest_checkpoint(checkpoint_dir: str): #(model, optimizer):
+    # Get all the checkpoint files and sort them
+    checkpoint_files = sorted(glob(os.path.join(checkpoint_dir, 'checkpoint_*.pt')))
+    print("\ncheckpoint_files: ", checkpoint_files)
+    if checkpoint_files:
+        latest_checkpoint = checkpoint_files[-1]
+        checkpoint = torch.load(latest_checkpoint)
+        print("finished loading latest checkpoint")
+        #model.load_state_dict(checkpoint['model_state_dict'])
+        #optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        #return checkpoint['epoch'], checkpoint['loss']
+        return checkpoint
+    else:
+        return None  # No checkpoint found, return none 
+
+
 
 
 
