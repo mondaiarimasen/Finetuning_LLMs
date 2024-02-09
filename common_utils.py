@@ -24,13 +24,20 @@ def init_wandb(project_name: str, run_name: str) -> None:
 
 # using wanb to log ram usage
 def log_ram_usage():
-    # Get memory usage in percentage
-    memory_usage_percent = psutil.virtual_memory().percent
-    memory_usage_used = psutil.virtual_memory().used/(1024*1024*1024) # get memory used in gb
-    memory_available = psutil.virtual_memory().available/(1024*1024*1024) # get memory used in gb; this is the memory that can be given instantly to processes without the system going into swap. 
-    #print("memory_usage_used (GB): ", memory_usage_used)
-    # Log the memory usage
-    wandb.log({"RAM Usage (%)": memory_usage_percent, "RAM Usage (GB)": memory_usage_used, "RAM Available (GB)": memory_available})
+    if wandb.run is not None: # check if wandb is logged in, otherwise do nothing
+        # Get memory usage in percentage
+        memory_usage_percent = psutil.virtual_memory().percent
+        memory_usage_used = psutil.virtual_memory().used/(1024*1024*1024) # get memory used in gb
+        memory_available = psutil.virtual_memory().available/(1024*1024*1024) # get memory used in gb; this is the memory that can be given instantly to processes without the system going into swap. 
+        #print("memory_usage_used (GB): ", memory_usage_used)
+        # Log the memory usage
+        wandb.log({"RAM Usage (%)": memory_usage_percent, "RAM Usage (GB)": memory_usage_used, "RAM Available (GB)": memory_available})
+
+# Define the (safe) logging function
+def safe_wandb_log(metrics_dict):
+    if wandb.run:
+        wandb.log(metrics_dict)
+
 
 #### finished wandb setup
     
