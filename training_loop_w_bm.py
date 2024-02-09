@@ -311,6 +311,11 @@ print("finished saving")
 # test fine-tuned model
 prompt = "The mysteries of the universe are"
 inputs = tokenizer.encode(prompt, return_tensors = 'pt').to(device)
+# Create an attention mask for the inputs
+attention_mask = torch.ones(inputs.shape, dtype=torch.long, device=device)
+# Set pad_token_id to the pad_token_id of the tokenizer
+pad_token_id = tokenizer.pad_token_id
+
 
 print("\nchecking if model is a DataParallel object")
 # Check if the model is a DataParallel object
@@ -324,6 +329,8 @@ else:
 print("\ngenerating output")
 outputs = model.generate(
     inputs, 
+    attention_mask=attention_mask,
+    pad_token_id=pad_token_id,
     max_length=100, 
     num_beams=5, 
     num_return_sequences=5, 
