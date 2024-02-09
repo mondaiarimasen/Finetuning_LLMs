@@ -116,13 +116,14 @@ model, device = use_more_gpus_in_parallel(model)
 
 model.to(device) # move model to device
 
-model.train() # tell model it's in training mode
-
 len_dataloader_train = len(dataloader['train'])
 print("len_dataloader_train: ", len_dataloader_train)
 
 len_dataloader_validation = len(dataloader['validation'])
 print("len_dataloader_validation: ", len_dataloader_validation)
+
+
+model.train() # tell model it's in training mode
 
 # training loop
 for epoch in range(epochs):
@@ -130,7 +131,7 @@ for epoch in range(epochs):
     total_loss = 0
     #batch_num = 1
     #print("\nbatch_num: ", batch_num)
-    for batch in tqdm(dataloader['train'][:batch_max], desc=f"Epoch {epoch+1}/{epochs}"):
+    for batch in tqdm(dataloader['train'][:batch_max], desc=f"batch loop for train at epoch {epoch+1}/{epochs}"):
         log_ram_usage()
         #print("in batch loop before if")
         #if batch_num <= batch_max:
@@ -227,7 +228,7 @@ for epoch in range(epochs):
     model.eval()
     total_eval_loss = 0
     with torch.no_grad():
-        for batch in tqdm(dataloader['validation'][:batch_max], desc=f"batch loop for validation"):
+        for batch in tqdm(dataloader['validation'][:batch_max], desc=f"batch loop for validation at epoch {epoch+1}/{epochs}"):
             input_ids, attention_mask = [item for item in batch]
             input_ids = input_ids.long()
             attention_mask = attention_mask.long()
