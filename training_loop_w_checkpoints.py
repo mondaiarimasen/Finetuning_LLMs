@@ -127,9 +127,13 @@ print("\nlearning rate: ", learning_rate)
 # load latest checkpoint
 checkpoint = load_latest_checkpoint(checkpoint_dir)
 if checkpoint:
+    print("\ncheckpoint exists and loading")
     start_epoch = checkpoint['next_epoch']
     model.load_state_dict(checkpoint['model_state_dict'])
     optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+    print("finished loading from checkpoint")
+# if no checkpoint exists, then it uses the default settings
+
 
 
 
