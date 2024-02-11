@@ -64,11 +64,11 @@ def load_latest_checkpoint(checkpoint_dir: str, device): #(model, optimizer):
 
 #### wandb setup
 
-def init_wandb(project_name: str, run_name: str) -> None:
+def init_wandb(project_name: str, run_name: str, resume: bool) -> None:
     print("\n### setting up wandb ###")
     wandb.login()
     # initialize WandB
-    wandb.init(project=project_name, name= run_name)
+    wandb.init(project=project_name, name= run_name, resume = resume)
 
     print("\n### finished initializing wandb ###")
 

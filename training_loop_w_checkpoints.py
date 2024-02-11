@@ -17,10 +17,10 @@ device = get_cuda_info()
 
 print("\n### defining variables ###")
 #### variables
-batch_size = 4 # adjust based on GPU memory
+batch_size = 32 # adjust based on GPU memory
 epochs = 20 # number of training epochs
 learning_rate = 3e-5
-batch_max = 2 #3300 # use None if want to run on all batches
+batch_max = 3300 # use None if want to run on all batches
 
 start_epoch = 0
 
@@ -28,7 +28,8 @@ suffix = "-bs-" + str(batch_size) + "-e-" + str(epochs) + "-lr-" + format(learni
 
 wandb_run_name = "training_loop" + suffix
 wandb_project = "gpt-2-finetuning"
-wandb_on = False
+wandb_resume = True
+wandb_on = True
 
 
 model_path = "./my_finetuned_gpt2" + suffix
@@ -49,7 +50,7 @@ checkpoints_queue = init_checkpoints_dir_queue(checkpoint_dir)
 
 #### wandb setup
 if wandb_on:
-    init_wandb(wandb_project, wandb_run_name)
+    init_wandb(wandb_project, wandb_run_name, wandb_resume)
 #### finished wandb setup
 
 
