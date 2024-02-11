@@ -45,6 +45,7 @@ home_dir = os.getcwd()
 dataset_config = 'wikitext-103-v1'
 
 checkpoint_dir = 'checkpoints' + suffix
+num_checkpoint = 2 # default is 5
 
 
 
@@ -167,7 +168,7 @@ for epoch in range(start_epoch, epochs):
     total_loss = 0
     batch_num = 1
     #print("\nbatch_num: ", batch_num)
-    for batch in tqdm(dataloader['train'], desc=f"batch loop for train at epoch {epoch+1}/{epochs}"):
+    for batch in tqdm(dataloader['train'], desc=f"batch loop for train at epoch {epoch}/{epochs} (0-indexed)"):
         log_ram_usage()
         #print("in batch loop before if")
         if batch_num <= batch_max:
@@ -280,7 +281,7 @@ for epoch in range(start_epoch, epochs):
     model.eval()
     total_eval_loss = 0
     with torch.no_grad():
-        for batch in tqdm(dataloader['validation'], desc=f"batch loop for validation at epoch {epoch+1}/{epochs}"):
+        for batch in tqdm(dataloader['validation'], desc=f"batch loop for validation at epoch {epoch}/{epochs} (0-indexed)"):
             input_ids, attention_mask = [item for item in batch]
             input_ids = input_ids.long()
             attention_mask = attention_mask.long()
@@ -307,12 +308,12 @@ for epoch in range(start_epoch, epochs):
     
     # Calculate average loss over the validation data
     avg_val_loss = total_eval_loss / len_dataloader_validation
-    print(f'Epoch {epoch+1} validation loss: {avg_val_loss}')
+    print(f'Epoch {epoch} validation loss: {avg_val_loss}')
     safe_wandb_log({"avg_val_loss": avg_val_loss}) 
 
     # Calculate the perplexity based on the mean validation loss
     validation_perplexity = torch.exp(torch.tensor(avg_val_loss))
-    print(f'Epoch {epoch+1} validation perplexity: {validation_perplexity}')
+    print(f'Epoch {epoch} validation perplexity: {validation_perplexity}')
     safe_wandb_log({"validation perplexity": validation_perplexity}) 
 
 
@@ -331,7 +332,7 @@ for epoch in range(start_epoch, epochs):
 
     # Save the checkpoint
     checkpoint_path = os.path.join(checkpoint_dir, f'checkpoint_{epoch:04d}.pt')
-    save_checkpoint(checkpoint_dict_to_save, checkpoint_path, num_checkpoint = 2)
+    save_checkpoint(checkpoint_dict_to_save, checkpoint_path, num_checkpoint = num_checkpoint)
     print(f"epoch {epoch} and checkpoint files are {get_all_checkpoints(checkpoint_dir)}")
     
 
