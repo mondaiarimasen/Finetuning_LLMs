@@ -18,12 +18,12 @@ device = get_cuda_info()
 
 print("\n### defining variables ###")
 #### variables
-batch_size = 8 # adjust based on GPU memory
-epochs = 12 # number of training epochs
-learning_rate = 2e-4
-batch_max = 64 #3300 # use None if want to run on all batches
+batch_size = 4 # adjust based on GPU memory
+epochs = 6 # number of training epochs
+learning_rate = 3e-4
+batch_max = 800 #3300 # use None if want to run on all batches
 
-max_len = 512 # maximum sequence length, should be no larger than max context window of model (for gpt2, this is 1024)
+max_len = 1024 # maximum sequence length, should be no larger than max context window of model (for gpt2, this is 1024)
 
 suffix = "-bs-" + str(batch_size) + "-e-" + str(epochs) + "-lr-" + format(learning_rate, '.0e') + "-bm-" + str(batch_max) + "-ml-" + str(max_len)
 
@@ -31,7 +31,7 @@ start_epoch = 0
 
 wandb_run_name = "training_loop" + suffix
 wandb_project = "gpt-2-finetuning"
-wandb_resume = True
+wandb_resume = False
 wandb_on_bool = True
 
 
@@ -135,6 +135,8 @@ print("\nlearning rate: ", learning_rate)
 get_cuda_info()
 torch.cuda.empty_cache()
 print("emptied cuda cache")
+
+os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True'
 
 # load latest checkpoint
 checkpoint = load_latest_checkpoint(checkpoint_dir, device)
