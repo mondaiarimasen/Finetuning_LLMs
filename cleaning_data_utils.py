@@ -105,3 +105,23 @@ def clean_completely(dataset_list, chars_to_remove, lst_to_remove_comp, lst_to_s
     return cleaned_lst
 
 
+
+
+def save_clean_dataset(filename: str, cleaned_dataset: List, uni_delim ="\0") -> None:
+    print("\n### saving to file ###")
+    # Using a unique delimiter to join and save strings
+    # Here we use uni_delim as it's unlikely to be in the text
+    with open(filename, 'w', encoding='utf-8') as file:
+        file.write(uni_delim.join(cleaned_dataset))
+    print("\n### finished saving to file ###")
+
+
+def load_clean_dataset(filename: str, uni_delim = "\0") -> List:
+    print("\n### loading from file ###")
+    # Load the strings back, splitting by the unique delimiter
+    with open(filename, 'r', encoding='utf-8') as file:
+        loaded_filtered_text = file.read().split(uni_delim)
+
+    print("\n### finished loading from file ###")
+    return loaded_filtered_text
+

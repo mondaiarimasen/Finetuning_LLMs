@@ -1,120 +1,63 @@
-#!pip install datasets wandb psutil
-
 import torch
 from transformers import GPT2LMHeadModel, GPT2Tokenizer, AdamW, GPT2Config, get_linear_schedule_with_warmup, AutoTokenizer, TextDataset
-from datasets import load_dataset, Dataset
-import os
-import pandas as pd
 from tqdm import tqdm
-import wandb
-import psutil
-from datetime import datetime
-import pytz
-import json
 import sys
-import torch.nn.functional as func
 from typing import List
-import multiprocessing as mp
+from cleaning_data_utils import *
+from tokenizing_utils import *
 
 
 ### variables
+keys = ["test", "validation", "train"]
+uni_delim = "\0"
+
 wandb_run_name = "attempting tokenizing test[:]"
 wandb_project = "gpt-2-finetuning"
 
-###
-
-
-def load_or_fetch_wikitext(dataset_name, dataset_config, dataset_path):
-  # Check if the dataset is already saved locally
-  if os.path.exists(dataset_path): # if it is
-    print(f"Loading dataset from {dataset_path}")
-    # Load the dataset from the file
-    dataset = load_dataset(dataset_name, dataset_config)
-    return dataset
-  else:
-    print(f"Fetching dataset from Hugging Face and caching it locally")
-    # Load the dataset from Hugging Face and cache it locally
-    dataset = load_dataset(dataset_name, dataset_config, cache_dir=dataset_path)
-    print("Dataset downloaded and saved.")
-    return dataset
-
-# Example usage
 dataset_name = 'wikitext'
 dataset_config = 'wikitext-103-v1'
 dataset_path_head = os.getcwd()
 home_dir = os.getcwd()
 dataset_filename = '/wikitext-103-raw-v1'
+
 dataset = load_or_fetch_wikitext(dataset_name, dataset_config, dataset_path_head + dataset_filename)
 
-print(dataset)
+clean_dataset_dir = home_dir + "/" + dataset_config + "-filtered-text-lists"
 
 
-print(dataset['train'][:5])
-
-print(dataset['train'])
-print(dataset['train']['text'][:5])
-
-# filtering out empty texts
-def filter_empty_texts(examples):
-    return bool(examples['text'].strip())
+###
 
 
-clean_dataset_path = dataset_path_head + "/" + dataset_config + "-clean-dataset.json"
+# Example usage
+clean_dataset = {}
 
-# (1/18/2024) Having problems with saving and loading the dataset, ignoring that for now and re-filtering each time instead
+for key in keys:
+  clean_dataset[key] = {}
 
-# check if the cleaned dataset json file exists
-if os.path.exists(clean_dataset_path): # if clean dataset already exists
-  print(f"\nClean dataset exists and loading...")
-  dataset = load_dataset(clean_dataset_path)
-  print(f"Finished loading clean dataset")
-  print(dataset)
+  clean_key_dataset_filename = "/" + key + "_text_filtered.txt"
+  clean_dataset_path = clean_dataset_dir + clean_key_dataset_filename
 
-else:
-  print("\nClean dataset does not exist and filtering empty text...")
-  for key in dataset.keys():
-    print(f"Cleaning {key} dataset")
-    dataset[key] = dataset[key].filter(filter_empty_texts)
-    print(f"Finished cleaning {key} dataset")
-
-  # Save the dataset to a JSON file
-  print(f"Saving cleaned dataset...")
-  #dataset.save_to_disk(clean_dataset_path)
-  print(f"Finished saving")
-
+  print(f"\nattempting to load clean {key} dataset")
+  if os.path.exists(clean_dataset_path): # if clean dataset already exists
+    print(f"Clean {key} dataset exists and loading...")
+    clean_dataset[key]['text'] = load_clean_dataset(clean_dataset_path, uni_delim = uni_delim)
+    print(f"Finished loading clean {key} dataset")
+    print(dataset)
+  else:
+    print(f"\nClean {key} dataset does not exist and exiting...")
+    print("you should clean the data first using the saving and checking filter script")
+    sys.exit()
+    
 
 # check results
 print(f"\nChecking datasets")
-for split, ds in dataset.items():
-    print(f"{split} dataset: {len(ds)} rows after filtering")
+for split, ds in clean_dataset.items():
+  print(f"{split} dataset: {len(ds['text'])} rows after filtering")
 
 # viewing first few elements
-print(dataset['train'][:5]['text'])
-print(dataset['validation'][:5]['text'])
-print(dataset['test'][:5]['text'])
-
-### using wandb now 
-# Get current date and time
-#local_timezone = pytz.timezone('US/Central')  # Replace 'YOUR_TIMEZONE' with your timezone
-#current_datetime = datetime.now(local_timezone)
-
-
-# Format as 'YYYY-MM-DD-HH-MM-SS'
-#formatted_datetime = current_datetime.strftime('%Y-%m-%d-%H-%M-%S')
-
-
-wandb.login()
-# initialize WandB
-wandb.init(project=wandb_project, name= wandb_run_name)
-
-# using wanb to log ram usage
-def log_ram_usage():
-    # Get memory usage in percentage
-    memory_usage_percent = psutil.virtual_memory().percent
-    # Log the memory usage
-    wandb.log({"RAM Usage (%)": memory_usage_percent})
-
-### 
+print(clean_dataset['train']['text'][:5])
+print(clean_dataset['validation']['text'][:5])
+print(clean_dataset['test']['text'][:5])
 
 
 
@@ -130,33 +73,14 @@ tokenizer.pad_token = tokenizer.eos_token
 
 max_len = 1024 # maximum sequence length, should be no larger than max context window of model (for gpt2, this is 1024)
 
-print("\n### conducting sanity check for tokenizing ###")
-# Sanity check: testing tokenizer on two subsets of train data but in one
-# case on the entire subset and in another case after splitting subset into two halves
-step = 10
 
-# entire subset
-tokens_encode_1 = tokenizer.encode(''.join(dataset['train']['text'][:step]), return_tensors='pt')
-print(tokens_encode_1)
-print(len(tokens_encode_1[0]))
+#### sanity check for tokenization
+sanity_check_tokenize_idpt_splice(clean_dataset['train']['text'], tokenizer, step = 10)
+####
 
-# tokenizing the first step/2 strings then the next step/2 strings and comparing
-tokens_encode_2a = tokenizer.encode(''.join(dataset['train']['text'][:step//2]), return_tensors='pt')
-print(tokens_encode_2a)
-print(len(tokens_encode_2a[0]))
-tokens_encode_2b = tokenizer.encode(''.join(dataset['train']['text'][step//2:step]),return_tensors='pt')
-print(len(tokens_encode_2b[0]))
+sys.exit()
 
-from itertools import chain
 
-# should print True for the sanity check to pass
-sanity_check_bool = all(a == b for a, b in zip(chain(tokens_encode_2a[0], tokens_encode_2b[0]), tokens_encode_1[0]))
-print("sanity_check_bool: ", sanity_check_bool)
-if sanity_check_bool == True:
-  print("passed sanity check")
-else: 
-  print("didn't pass sanity check")
-  sys.exit()
 
 
 

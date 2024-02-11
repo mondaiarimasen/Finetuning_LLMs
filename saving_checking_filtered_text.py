@@ -3,6 +3,7 @@ from cleaning_data_utils import *
 
 #### variables
 keys = ["test","validation", "train"]
+uni_delim = "\0"
 
 wandb_run_name = "training_loop"
 wandb_project = "gpt-2-finetuning"
@@ -47,16 +48,16 @@ lst_to_strip_pre_ws = [":", ";", ",", ".", "- ", "'", ")", "!", "]"]
 lst_to_strip_post_ws = ["-", "...", "(", "["]
 
 
-cleaned_dataset = {}
+clean_dataset = {}
 
 for key in keys:
     dataset_to_clean = dataset[key]['text']#[15:45]
-    cleaned_dataset[key] = {}
-    print(f"cleaning {key} dataset")
+    clean_dataset[key] = {}
+    print(f"\ncleaning {key} dataset")
 
-    cleaned_dataset[key]['text'] = clean_completely(dataset_to_clean, chars_to_remove, lst_to_remove_comp, lst_to_strip_pre_ws, lst_to_strip_post_ws)
+    clean_dataset[key]['text'] = clean_completely(dataset_to_clean, chars_to_remove, lst_to_remove_comp, lst_to_strip_pre_ws, lst_to_strip_post_ws)
     print(f"this is last ten ele of cleaned_dataset[{key}] after clean_completely:")
-    for item in cleaned_dataset[key]['text'][-20:]:
+    for item in clean_dataset[key]['text'][-20:]:
         print(item)
 
     #print("\n now printing original")
@@ -88,31 +89,18 @@ os.makedirs(directory, exist_ok=True)
 for key in keys:
     print("key: ", key)
     filename = "/" + key + "_text_filtered.txt"
-    print("\n### saving to file ###")
 
-
-    # Using a unique delimiter to join and save strings
-    # Here we use uni_delim as it's unlikely to be in the text
-    with open(directory + filename, 'w', encoding='utf-8') as file:
-        file.write(uni_delim.join(cleaned_dataset[key]['text']))
-    print("\n### finished saving to file ###")
+    save_clean_dataset(directory + filename, clean_dataset[key]['text'], uni_delim = uni_delim)
 
 
     # loading filtered text to check integrity of saved file
-
-    print("\n### loading from file ###")
-
     # Load the strings back, splitting by the unique delimiter
-    with open(directory + filename, 'r', encoding='utf-8') as file:
-        loaded_filtered_text = file.read().split(uni_delim)
-
-    print("\n### finished loading from file ###")
-
+    loaded_filtered_text = load_clean_dataset(directory+filename,uni_delim = uni_delim)
 
     print("loaded_filtered_text[:5]: ", loaded_filtered_text[:5])
 
     # checking if loaded filtered text matches filtered text computed
-    if loaded_filtered_text == cleaned_dataset[key]['text']:
+    if loaded_filtered_text == clean_dataset[key]['text']:
         print("The lists are the same.")
     else:
         print("The lists are different.")
