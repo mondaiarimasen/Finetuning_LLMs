@@ -272,7 +272,7 @@ for epoch in range(start_epoch, epochs):
     safe_wandb_log({"avg_train_loss": avg_train_loss})
 
 
-    print(f"Epoch {epoch+1}/{epochs}, avg train loss: {avg_train_loss}")
+    print(f"Epoch {epoch}/{epochs}, avg train loss: {avg_train_loss}")
     safe_wandb_log({"epoch": epoch}) 
 
 

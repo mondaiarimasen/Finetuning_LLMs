@@ -37,7 +37,7 @@ def save_checkpoint(checkpoint_dict: Dict, filename: str, num_checkpoint = 5):
     checkpoint_dir = os.path.dirname(filename)
     checkpoint_files = get_all_checkpoints(checkpoint_dir)
 
-    if len(checkpoint_files) > num_checkpoint:
+    if len(checkpoint_files) >= num_checkpoint:
         oldest_checkpoint = checkpoint_files[0]
         print("attempting to remove oldest checkpoint from dir")
         try:
