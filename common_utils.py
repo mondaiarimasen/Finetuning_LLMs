@@ -234,7 +234,7 @@ def get_hl_model_info(model):
 
 #### constructing tokenized_datasets_pt for a specified key
 
-def get_tokenized_datasets_pt(keys: List[str], clean_token_dir: str, filtered_text_dir: str) -> Dict[str, Union[List[int], Tensor]]:
+def get_tokenized_datasets_pt(keys: List[str], clean_token_dir: str, filtered_text_dir: str, max_length = 1024) -> Dict[str, Union[List[int], Tensor]]:
     print("\n### constructing tokenized_datasets_pt ###")
 
     # tokenized_datasets_pt is dict structure {'test' : {}, 'train': {}, 'validation': {}}
@@ -245,6 +245,13 @@ def get_tokenized_datasets_pt(keys: List[str], clean_token_dir: str, filtered_te
     for key in keys:
         print(f"getting text, input_ids, and attention_mask for {key}")
         key_clean_tokens = load_clean_tokens(clean_token_dir, key)
+
+        # check to make sure the max sequence length is set properly
+        if max_length!= key_clean_tokens.shape[1]:
+            print("reshaping token tensor")
+            key_clean_tokens = key_clean_tokens.view(-1,max_length)
+            print("finished reshaping token tensor")
+
         tokenized_datasets_pt[key] = {'text': load_filtered_text(filtered_text_dir, key), 'input_ids': key_clean_tokens, 'attention_mask': torch.ones_like(key_clean_tokens)}
         # attention_mask is all 1s here because we don't use any padding in the tokenization (we just throw away the tail)
 

@@ -19,13 +19,15 @@ device = get_cuda_info()
 print("\n### defining variables ###")
 #### variables
 batch_size = 8 # adjust based on GPU memory
-epochs = 15 # number of training epochs
-learning_rate = 3e-4
-batch_max = 16 #3300 # use None if want to run on all batches
+epochs = 12 # number of training epochs
+learning_rate = 2e-4
+batch_max = 64 #3300 # use None if want to run on all batches
+
+max_len = 512 # maximum sequence length, should be no larger than max context window of model (for gpt2, this is 1024)
+
+suffix = "-bs-" + str(batch_size) + "-e-" + str(epochs) + "-lr-" + format(learning_rate, '.0e') + "-bm-" + str(batch_max) + "-ml-" + str(max_len)
 
 start_epoch = 0
-
-suffix = "-bs-" + str(batch_size) + "-e-" + str(epochs) + "-lr-" + format(learning_rate, '.0e') + "-bm-" + str(batch_max)
 
 wandb_run_name = "training_loop" + suffix
 wandb_project = "gpt-2-finetuning"
@@ -35,8 +37,6 @@ wandb_on_bool = True
 
 model_path = "./my_finetuned_gpt2" + suffix
 save_model_bool = False
-
-max_len = 1024 # maximum sequence length, should be no larger than max context window of model (for gpt2, this is 1024)
 
 # uni_delim = "\0" # a unique delimiter to save and load filtered text from dataset
 # Here we use "\0" (null character) as it's unlikely to be in the text
@@ -103,7 +103,7 @@ test_tokens = load_clean_tokens(clean_token_dir, "test")
 #### constructing tokenized_datasets_pt
 
 keys = ['train', 'validation']
-tokenized_datasets_pt = get_tokenized_datasets_pt(keys, clean_token_dir, filtered_text_dir)
+tokenized_datasets_pt = get_tokenized_datasets_pt(keys, clean_token_dir, filtered_text_dir, max_length = max_len)
 # tokenized_datasets_pt is dict structure {'test' : {}, 'train': {}, 'validation': {}}
 # and for each key of tokenized_datasets_pt, tokenized_datasets_pt[key] 
 # is dict of structure {'text': original text, 'input_ids': 2d pytorch tensor where each row is len max_len, i.e. max seqence length, 'attention_mask': 2d pytorch tensor, same shape as input_ids, where 1 means corresponding element of input_ids is real data, 0 means it's a padding token}
