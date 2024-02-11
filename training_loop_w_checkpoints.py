@@ -11,7 +11,7 @@ import torch.nn as nn
 from common_utils import *
 
 
-get_cuda_info()
+device = get_cuda_info()
 
 #sys.exit()
 
@@ -76,6 +76,7 @@ tokenizer_name = 'gpt2-tokenizer'
 tokenizer.pad_token = tokenizer.eos_token
 
 get_hl_model_info(model) # I have 124439808 parameters (124M), so this is the gpt2-small
+model.to(device)
 
 #### finished loading model
 
@@ -123,9 +124,10 @@ optimizer = AdamW(model.parameters(), lr = learning_rate)
 print("\nlearning rate: ", learning_rate)
 
 
+get_cuda_info()
 
 # load latest checkpoint
-checkpoint = load_latest_checkpoint(checkpoint_dir)
+checkpoint = load_latest_checkpoint(checkpoint_dir, device)
 if checkpoint:
     print("\ncheckpoint exists and loading")
     start_epoch = checkpoint['next_epoch']
@@ -136,15 +138,9 @@ if checkpoint:
 
 
 
+model = use_more_gpus_in_parallel(model)
 
-
-get_cuda_info()
-
-
-
-model, device = use_more_gpus_in_parallel(model)
-
-model.to(device) # move model to device
+#model.to(device) # move model to device
 
 len_dataloader_train = len(dataloader['train'])
 print("len_dataloader_train: ", len_dataloader_train)
@@ -177,6 +173,8 @@ for epoch in range(start_epoch, epochs):
             input_ids = input_ids.long()
             attention_mask = attention_mask.long()
 
+            input_ids.to(device)
+            attention_mask.to(device)
             log_ram_usage()
 
             #print("input_ids.shape: ", input_ids.shape) 
@@ -197,7 +195,7 @@ for epoch in range(start_epoch, epochs):
             # and they require the indices to be integers because these 
             # indices are used to look up specific rows in the embedding matrix. 
             labels = labels.long() 
-            
+            labels.to(device)
             log_ram_usage()
             #print("feeding into model")
             
@@ -226,6 +224,19 @@ for epoch in range(start_epoch, epochs):
             #print("doing backpropagation")
             loss.backward()
             log_ram_usage()
+
+
+            for param in model.parameters():
+                print("checking model params on same device")
+                assert param.device == torch.device('cuda:0'), "Model parameter device mismatch"
+
+            for group in optimizer.param_groups:
+                for param in group['params']:
+                    if param.grad is not None:
+                        print("checking device mismatch")
+                        assert param.grad.device == param.device, "Gradient device mismatch"
+
+
             # optimizer updates the weights based on the gradients calculated during backpropagation
             #print("updating weights using optimizer")
             optimizer.step()
@@ -264,11 +275,14 @@ for epoch in range(start_epoch, epochs):
             input_ids = input_ids.long()
             attention_mask = attention_mask.long()
 
+            input_ids.to(device)
+            attention_mask.to(device)
             log_ram_usage()
 
             labels = torch.cat((input_ids[:, 1:], torch.tensor([[-100]] * input_ids.size(0))), dim=1)
 
             labels = labels.long() 
+            labels.to(device)
             log_ram_usage()
 
             outputs = model(input_ids=input_ids, attention_mask=attention_mask, labels = labels)
@@ -307,7 +321,7 @@ for epoch in range(start_epoch, epochs):
 
     # Save the checkpoint
     checkpoint_path = os.path.join(checkpoint_dir, f'checkpoint_{epoch:04d}.pt')
-    save_checkpoint(checkpoint_dict_to_save, checkpoint_path, checkpoints_queue, num_checkpoint = 3)
+    save_checkpoint(checkpoint_dict_to_save, checkpoint_path, checkpoints_queue, num_checkpoint = 2)
     print(f"epoch {epoch} and checkpoint queue is {checkpoints_queue}")
     
 

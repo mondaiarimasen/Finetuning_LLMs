@@ -42,14 +42,14 @@ def save_checkpoint(checkpoint_dict: Dict, filename: str, checkpoints_queue,num_
             sys.exit()
 
 # Function to load the latest checkpoint, returns the checkpoint or None
-def load_latest_checkpoint(checkpoint_dir: str): #(model, optimizer):
+def load_latest_checkpoint(checkpoint_dir: str, device): #(model, optimizer):
     # Get all the checkpoint files and sort them
     checkpoint_files = sorted(glob(os.path.join(checkpoint_dir, 'checkpoint_*.pt')))
     print("\ncheckpoint_files: ", checkpoint_files)
     if checkpoint_files:
         latest_checkpoint = checkpoint_files[-1]
         print("latest_checkpoint: ", latest_checkpoint)
-        checkpoint = torch.load(latest_checkpoint)
+        checkpoint = torch.load(latest_checkpoint, map_location=device)
         print("finished loading latest checkpoint")
         #model.load_state_dict(checkpoint['model_state_dict'])
         #optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
@@ -152,24 +152,25 @@ def load_clean_tokens(directory: str, key: str) -> Tensor:
 
 
 #### get cuda info
-
-def get_cuda_info() -> None:
+# returns device we are using; also naming first gpu we connected to as 'cuda:0'
+def get_cuda_info() -> device:
     print("torch.__version__: ", torch.__version__)
     print("torch.version.cuda: ", torch.version.cuda)
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     # can double check if device is on gpu
     print("GPU is available: ", torch.cuda.is_available()) # Should return True if CUDA is available and accessible by PyTorch
     if torch.cuda.is_available():
         print("index of current gpu: ", torch.cuda.current_device())  # Returns the index of the current GPU
         print("number of gpus available to pytorch: ", torch.cuda.device_count())  # Returns the number of GPUs available to PyTorch
         print("name of device: ", torch.cuda.get_device_name(0))  # Returns the name of a device
+    return device
 
 
 #### use more gpus in parallel if possible
 
 
-# returns the model (possibily as DataParallel object) and device that we are using
+# returns the model (possibily as DataParallel object) ; and device that we are using
 def use_more_gpus_in_parallel(model):
     print("checking if gpu device count is more than 1: ")
     # Then, use DataParallel to wrap your model if multiple GPUs are available
@@ -179,14 +180,14 @@ def use_more_gpus_in_parallel(model):
         model = nn.DataParallel(model)
         print("model is now output of DataParallel")
         # Move your model to the primary device
-        device = torch.device('cuda:0')
+        #device = torch.device('cuda:0')
         print("finished moving to primary device cuda:0")
     else:
         print(f"Using {torch.cuda.device_count()} GPU")
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        #device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     
     
-    return model, device
+    return model#, device
 
 
 
