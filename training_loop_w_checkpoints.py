@@ -18,10 +18,10 @@ device = get_cuda_info()
 
 print("\n### defining variables ###")
 #### variables
-batch_size = 4 # adjust based on GPU memory
-epochs = 20 # number of training epochs
-learning_rate = 3e-5
-batch_max = 2 #3300 # use None if want to run on all batches
+batch_size = 8 # adjust based on GPU memory
+epochs = 15 # number of training epochs
+learning_rate = 3e-4
+batch_max = 16 #3300 # use None if want to run on all batches
 
 start_epoch = 0
 
@@ -168,6 +168,7 @@ for epoch in range(start_epoch, epochs):
     total_loss = 0
     batch_num = 1
     #print("\nbatch_num: ", batch_num)
+    print("\n")
     for batch in tqdm(dataloader['train'], desc=f"batch loop for train at epoch {epoch}/{epochs} (0-indexed)"):
         log_ram_usage()
         #print("in batch loop before if")
