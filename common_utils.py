@@ -48,6 +48,7 @@ def load_latest_checkpoint(checkpoint_dir: str): #(model, optimizer):
     print("\ncheckpoint_files: ", checkpoint_files)
     if checkpoint_files:
         latest_checkpoint = checkpoint_files[-1]
+        print("latest_checkpoint: ", latest_checkpoint)
         checkpoint = torch.load(latest_checkpoint)
         print("finished loading latest checkpoint")
         #model.load_state_dict(checkpoint['model_state_dict'])
