@@ -16,44 +16,62 @@ from glob import glob
 
 #### checkpoints
 
-# define checkpoints directory, returns an empty queue to keep track of checkpoints
-def init_checkpoints_dir_queue(checkpoint_dir):
+# define checkpoints directory
+def init_checkpoints_dir(checkpoint_dir):
     # Define the directory to save checkpoints
     os.makedirs(checkpoint_dir, exist_ok=True)
 
-    # Keep track of checkpoints using a deque to maintain the 5 most recent ones
-    return deque()
+    
+# returns list of all saved checkpoints
+def get_all_checkpoints(checkpoint_dir: str) -> List:
+    checkpoint_files = sorted(glob(os.path.join(checkpoint_dir, 'checkpoint_*.pt')))
+    print("\ncheckpoint_files: ", checkpoint_files)
+    return checkpoint_files
 
 # save checkpoints, and make sure there are at most num_checkpoint number of checkpoints in directory at most; num_checkpoint is default 5
-def save_checkpoint(checkpoint_dict: Dict, filename: str, checkpoints_queue,num_checkpoint = 5):
-    print("\n attempting to save checkpoint at ", filename)
+def save_checkpoint(checkpoint_dict: Dict, filename: str, num_checkpoint = 5):
+    print("\nattempting to save checkpoint at ", filename)
     torch.save(checkpoint_dict, filename)
     print("successfully saved checkpoint_dict at ", filename)
-    # Append the new checkpoint and remove the oldest if the limit is exceeded
-    checkpoints_queue.append(filename)
-    if len(checkpoints_queue) > num_checkpoint:
-        oldest_checkpoint = checkpoints_queue.popleft()
-        print("removed oldest checkpoint from queue")
+
+    checkpoint_dir = os.path.dirname(filename)
+    checkpoint_files = get_all_checkpoints(checkpoint_dir)
+
+    if len(checkpoint_files) > num_checkpoint:
+        oldest_checkpoint = checkpoint_files[0]
+        print("attempting to remove oldest checkpoint from dir")
         try:
             os.remove(oldest_checkpoint)
-            print("removed oldest checkpoint file: ", oldest_checkpoint)
+            print("removed oldest checkpoint file from dir: ", oldest_checkpoint)
         except OSError:
             print("couldn't remove oldest_checkpoint")
             sys.exit()
 
+
 # Function to load the latest checkpoint, returns the checkpoint or None
 def load_latest_checkpoint(checkpoint_dir: str, device): #(model, optimizer):
     # Get all the checkpoint files and sort them
-    checkpoint_files = sorted(glob(os.path.join(checkpoint_dir, 'checkpoint_*.pt')))
-    print("\ncheckpoint_files: ", checkpoint_files)
+    checkpoint_files = get_all_checkpoints(checkpoint_dir)
+    num_checkpoint_files = len(checkpoint_files)
+    load_failed_bool = True
     if checkpoint_files:
         latest_checkpoint = checkpoint_files[-1]
         print("latest_checkpoint: ", latest_checkpoint)
-        checkpoint = torch.load(latest_checkpoint, map_location=device)
-        print("finished loading latest checkpoint")
-        #model.load_state_dict(checkpoint['model_state_dict'])
-        #optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-        #return checkpoint['epoch'], checkpoint['loss']
+        i = num_checkpoint_files - 1
+        while load_failed_bool and i>=0:
+            try: 
+                checkpoint = torch.load(checkpoint_files[i], map_location=device)
+                print(f"finished loading checkpoint {i - num_checkpoint_files}")
+                load_failed_bool = False
+            except Exception as e:
+                print(f"Failed to load checkpoint {i - num_checkpoint_files}: {e}")
+                print("trying to load from next most checkpoint, if exists")
+                i -=1
+        
+        # if all saved checkpoints failed, return None
+        if load_failed_bool and i <0:
+            return None
+        # else return the checkpoint
         return checkpoint
     else:
         return None  # No checkpoint found, return none 
@@ -153,7 +171,7 @@ def load_clean_tokens(directory: str, key: str) -> Tensor:
 
 #### get cuda info
 # returns device we are using; also naming first gpu we connected to as 'cuda:0'
-def get_cuda_info() -> device:
+def get_cuda_info():
     print("torch.__version__: ", torch.__version__)
     print("torch.version.cuda: ", torch.version.cuda)
 
@@ -311,6 +329,20 @@ def get_dataloader(batch_size: int, tokenized_datasets_pt: Dict):
     return dataloader
 
 
+#### saving pretrained and finetuned model
+
+def save_finetuned_model(model, model_path: str):
+    print("\nchecking if model is a DataParallel object")
+    # Check if the model is a DataParallel object
+    if isinstance(model, nn.DataParallel):
+        print("it is, so saving with model.module.save_pretrained(model_path)")
+        # If it is, save using the .module attribute
+        model.module.save_pretrained(model_path)
+    else:
+        print("it's not, so saving with model.save_pretrained(model_path)")
+        # If it's not, save it directly
+        model.save_pretrained(model_path)
+    print("finished saving")
 
 
 

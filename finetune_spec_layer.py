@@ -423,5 +423,48 @@ for parameter in model.transformer.h[-1].parameters():  # Unfreeze the last laye
 # one would add this before the training loop if you wanted to train the last layer
 
 
+########## possible code to freeze other layers and fine tune specific layer
+
+from transformers import GPT2Model, GPT2Tokenizer, AdamW
+import torch
+
+# Load GPT-2 model
+model = GPT2Model.from_pretrained('gpt2')
+
+# Freeze all parameters
+for param in model.parameters():
+    param.requires_grad = False
+
+# Unfreeze specific layer(s)
+# Example: Unfreeze the parameters of the last layer
+for param in model.h[-1].parameters():
+    param.requires_grad = True
+
+# Define an optimizer for the unfrozen parameters
+optimizer = AdamW(filter(lambda p: p.requires_grad, model.parameters()), lr=1e-5)
+
+# Define a loss function if necessary
+# For GPT-2, you might be working with a language modeling loss, like CrossEntropyLoss
+
+# Training loop (simplified)
+for epoch in range(num_epochs):
+    for batch in train_dataloader:
+        inputs = batch['input_ids']
+        labels = batch['labels']  # Assuming you have prepared labels
+
+        # Forward pass
+        outputs = model(inputs, labels=labels)
+        loss = outputs.loss
+
+        # Backward pass and optimize
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+
+        print(f"Epoch {epoch}, Loss: {loss.item()}")
+
+
+
+
 
 

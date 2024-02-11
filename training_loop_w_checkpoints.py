@@ -13,14 +13,15 @@ from common_utils import *
 
 device = get_cuda_info()
 
+
 #sys.exit()
 
 print("\n### defining variables ###")
 #### variables
-batch_size = 32 # adjust based on GPU memory
+batch_size = 4 # adjust based on GPU memory
 epochs = 20 # number of training epochs
 learning_rate = 3e-5
-batch_max = 3300 # use None if want to run on all batches
+batch_max = 2 #3300 # use None if want to run on all batches
 
 start_epoch = 0
 
@@ -29,10 +30,11 @@ suffix = "-bs-" + str(batch_size) + "-e-" + str(epochs) + "-lr-" + format(learni
 wandb_run_name = "training_loop" + suffix
 wandb_project = "gpt-2-finetuning"
 wandb_resume = True
-wandb_on = True
+wandb_on_bool = True
 
 
 model_path = "./my_finetuned_gpt2" + suffix
+save_model_bool = False
 
 max_len = 1024 # maximum sequence length, should be no larger than max context window of model (for gpt2, this is 1024)
 
@@ -43,13 +45,17 @@ home_dir = os.getcwd()
 dataset_config = 'wikitext-103-v1'
 
 checkpoint_dir = 'checkpoints' + suffix
+
+
+
+
 ####
 
 #### checkpoints setup
-checkpoints_queue = init_checkpoints_dir_queue(checkpoint_dir)
+init_checkpoints_dir(checkpoint_dir)
 
 #### wandb setup
-if wandb_on:
+if wandb_on_bool:
     init_wandb(wandb_project, wandb_run_name, wandb_resume)
 #### finished wandb setup
 
@@ -126,6 +132,8 @@ print("\nlearning rate: ", learning_rate)
 
 
 get_cuda_info()
+torch.cuda.empty_cache()
+print("emptied cuda cache")
 
 # load latest checkpoint
 checkpoint = load_latest_checkpoint(checkpoint_dir, device)
@@ -226,7 +234,8 @@ for epoch in range(start_epoch, epochs):
             loss.backward()
             log_ram_usage()
 
-
+            '''
+            # for debugging
             for param in model.parameters():
                 print("checking model params on same device")
                 assert param.device == torch.device('cuda:0'), "Model parameter device mismatch"
@@ -236,7 +245,7 @@ for epoch in range(start_epoch, epochs):
                     if param.grad is not None:
                         print("checking device mismatch")
                         assert param.grad.device == param.device, "Gradient device mismatch"
-
+            '''
 
             # optimizer updates the weights based on the gradients calculated during backpropagation
             #print("updating weights using optimizer")
@@ -322,8 +331,8 @@ for epoch in range(start_epoch, epochs):
 
     # Save the checkpoint
     checkpoint_path = os.path.join(checkpoint_dir, f'checkpoint_{epoch:04d}.pt')
-    save_checkpoint(checkpoint_dict_to_save, checkpoint_path, checkpoints_queue, num_checkpoint = 2)
-    print(f"epoch {epoch} and checkpoint queue is {checkpoints_queue}")
+    save_checkpoint(checkpoint_dict_to_save, checkpoint_path, num_checkpoint = 2)
+    print(f"epoch {epoch} and checkpoint files are {get_all_checkpoints(checkpoint_dir)}")
     
 
 
@@ -346,17 +355,8 @@ print("-----finished training and validation-----")
 # model.save_pretrained('/content/drive/My Drive/my_finetuned_model')
 # tokenizer.save_pretrained('/content/drive/My Drive/my_finetuned_model')
 
-print("\nchecking if model is a DataParallel object")
-# Check if the model is a DataParallel object
-if isinstance(model, nn.DataParallel):
-    print("it is, so saving with model.module.save_pretrained(model_path)")
-    # If it is, save using the .module attribute
-    model.module.save_pretrained(model_path)
-else:
-    print("it's not, so saving with model.save_pretrained(model_path)")
-    # If it's not, save it directly
-    model.save_pretrained(model_path)
-print("finished saving")
+if save_model_bool: 
+    save_finetuned_model(model, model_path)
 
 #tokenizer.save_pretrained(model_path) # don't need to save tokenizer because it's unchanged
 
