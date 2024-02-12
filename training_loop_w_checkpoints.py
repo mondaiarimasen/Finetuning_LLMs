@@ -20,8 +20,8 @@ print("\n### defining variables ###")
 #### variables
 batch_size = 8 # adjust based on GPU memory
 epochs = 6 # number of training epochs
-learning_rate = 3e-4
-batch_max = 800 #3300 # use None if want to run on all batches
+learning_rate = 5e-3
+batch_max = 400 #3300 # use None if want to run on all batches
 
 max_len = 1024 # maximum sequence length, should be no larger than max context window of model (for gpt2, this is 1024)
 
@@ -102,7 +102,7 @@ test_tokens = load_clean_tokens(clean_token_dir + "/test" + clean_token_file_suf
 
 #### constructing tokenized_datasets_pt
 
-keys = ['train', 'validation']
+keys = ['train', 'validation', 'test']
 tokenized_datasets_pt = get_tokenized_datasets_pt(keys, clean_token_dir, clean_token_file_suffix, filtered_text_dir, filtered_text_file_suffix, max_length = max_len)
 # tokenized_datasets_pt is dict structure {'test' : {}, 'train': {}, 'validation': {}}
 # and for each key of tokenized_datasets_pt, tokenized_datasets_pt[key] 
@@ -159,6 +159,10 @@ print("len_dataloader_train: ", len_dataloader_train)
 
 len_dataloader_validation = len(dataloader['validation'])
 print("len_dataloader_validation: ", len_dataloader_validation)
+
+len_dataloader_test = len(dataloader['test'])
+print("len_dataloader_test: ", len_dataloader_test)
+
 
 batch_max = batch_max if batch_max is not None else len_dataloader_train
 
@@ -400,6 +404,52 @@ outputs = model.generate(
 
 print("Generated text:")
 print(tokenizer.decode(outputs[0], skip_special_tokens=True))
+
+
+
+#### testing on test set
+print("\ntesting on test set")
+model.eval()
+total_test_loss = 0
+with torch.no_grad():
+    for batch in tqdm(dataloader['test'], desc=f"batch loop for test"):
+        input_ids, attention_mask = [item for item in batch]
+        input_ids = input_ids.long()
+        attention_mask = attention_mask.long()
+
+        input_ids.to(device)
+        attention_mask.to(device)
+
+        log_ram_usage()
+
+        outputs = model(input_ids=input_ids, attention_mask=attention_mask, labels = input_ids)
+        loss = outputs.loss
+        
+        #print("taking mean of outputs if outputs.ndim>0, else just returning outputs")
+        loss = loss.mean() if loss.ndim > 0 else loss
+
+        total_test_loss += loss.item()
+
+        log_ram_usage()
+
+# Calculate average loss over the validation data
+avg_test_loss = total_test_loss / len_dataloader_test
+print(f'test loss: {avg_test_loss}')
+safe_wandb_log({"avg_test_loss": avg_test_loss}) 
+
+# Calculate the perplexity based on the mean validation loss
+test_perplexity = torch.exp(torch.tensor(avg_test_loss))
+print(f'Test perplexity: {test_perplexity}')
+safe_wandb_log({"test perplexity": test_perplexity}) 
+
+
+
+
+
+
+
+
+
 
 
 
