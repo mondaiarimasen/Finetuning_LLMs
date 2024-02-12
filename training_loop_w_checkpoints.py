@@ -34,8 +34,8 @@ wandb_project = "gpt-2-finetuning"
 wandb_resume = False
 wandb_on_bool = True
 
-
-model_path = "./my_finetuned_gpt2" + suffix
+model_name = 'gpt2'
+model_path = "./my_finetuned_" + model_name + suffix
 save_model_bool = False
 
 # uni_delim = "\0" # a unique delimiter to save and load filtered text from dataset
@@ -47,6 +47,13 @@ dataset_config = 'wikitext-103-v1'
 checkpoint_dir = 'checkpoints' + suffix
 num_checkpoint = 2 # default is 5
 
+#### filtered text directory for test, train, validation sets
+filtered_text_dir = home_dir + "/" + dataset_config + "-" + model_name + "-filtered-text-lists"
+filtered_text_file_suffix = "_text_filtered.txt"
+
+#### clean token dir for test, train, validation sets
+clean_token_dir = home_dir + "/" + dataset_config + "-" + model_name + "-tokenizer-clean-tokens-pt"
+clean_token_file_suffix = '_tokens_clean.pt'
 
 
 
@@ -75,7 +82,6 @@ print("suffix: ", suffix)
 
 print("\n### now loading gpt2 model and tokenizer ### ")
 # now load the pre-trained gpt2 model and tokenizer
-model_name = 'gpt2'
 model = GPT2LMHeadModel.from_pretrained(model_name)
 tokenizer = GPT2Tokenizer.from_pretrained(model_name) # gpt2 specific tokenizer
 tokenizer_name = 'gpt2-tokenizer'
@@ -88,14 +94,6 @@ model.to(device)
 
 #### finished loading model
 
-
-#### filtered text directory for test, train, validation sets
-filtered_text_dir = home_dir + "/" + dataset_config + "-" + model_name + "-filtered-text-lists"
-filtered_text_file_suffix = "_text_filtered.txt"
-
-#### clean token dir for test, train, validation sets
-clean_token_dir = home_dir + "/" + dataset_config + "-" + model_name + "-tokenizer-clean-tokens-pt"
-clean_token_file_suffix = '_tokens_clean.pt'
 
 #### 
 test_lst = load_filtered_text(filtered_text_dir, "test")

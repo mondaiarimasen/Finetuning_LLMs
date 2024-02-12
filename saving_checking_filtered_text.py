@@ -16,6 +16,8 @@ dataset_config = 'wikitext-103-v1'
 dataset_path_head = os.getcwd()
 home_dir = os.getcwd()
 dataset_filename = '/wikitext-103-raw-v1'
+directory = home_dir + "/" + dataset_config + "-filtered-text-lists"
+filtered_text_file_suffix = "_text_filtered.txt"
 
 
 
@@ -83,12 +85,11 @@ for key in keys:
 
 print("\n### Create the directory to save if it does not exist ###")
 # Create the directory if it does not exist
-directory = home_dir + "/" + dataset_config + "-filtered-text-lists"
 os.makedirs(directory, exist_ok=True)
 
 for key in keys:
     print("key: ", key)
-    filename = "/" + key + "_text_filtered.txt"
+    filename = "/" + key + filtered_text_file_suffix
 
     save_clean_dataset(directory + filename, clean_dataset[key]['text'], uni_delim = uni_delim)
 
