@@ -91,9 +91,11 @@ model.to(device)
 
 #### filtered text directory for test, train, validation sets
 filtered_text_dir = home_dir + "/" + dataset_config + "-" + model_name + "-filtered-text-lists"
+filtered_text_file_suffix = "_text_filtered.txt"
 
 #### clean token dir for test, train, validation sets
 clean_token_dir = home_dir + "/" + dataset_config + "-" + model_name + "-tokenizer-clean-tokens-pt"
+clean_token_file_suffix = '_tokens_clean.pt'
 
 #### 
 test_lst = load_filtered_text(filtered_text_dir, "test")
@@ -103,7 +105,7 @@ test_tokens = load_clean_tokens(clean_token_dir, "test")
 #### constructing tokenized_datasets_pt
 
 keys = ['train', 'validation']
-tokenized_datasets_pt = get_tokenized_datasets_pt(keys, clean_token_dir, filtered_text_dir, max_length = max_len)
+tokenized_datasets_pt = get_tokenized_datasets_pt(keys, clean_token_dir, clean_token_file_suffix, filtered_text_dir, filtered_text_file_suffix, max_length = max_len)
 # tokenized_datasets_pt is dict structure {'test' : {}, 'train': {}, 'validation': {}}
 # and for each key of tokenized_datasets_pt, tokenized_datasets_pt[key] 
 # is dict of structure {'text': original text, 'input_ids': 2d pytorch tensor where each row is len max_len, i.e. max seqence length, 'attention_mask': 2d pytorch tensor, same shape as input_ids, where 1 means corresponding element of input_ids is real data, 0 means it's a padding token}

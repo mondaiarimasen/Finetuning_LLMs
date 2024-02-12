@@ -116,8 +116,7 @@ def safe_wandb_log(metrics_dict):
 # returns list with filtered key text
 # uni_delim is a unique delimiter to save and load filtered text from dataset
 # Here we use "\0" (null character) as it's unlikely to be in the text
-def load_filtered_text(directory: str, key: str, uni_delim = "\0") -> List:
-    filename = directory + "/" + key + "_text_filtered.txt"
+def load_filtered_text(filename: str, key: str, uni_delim = "\0") -> List:
     # check if the filtered dataset txt file exists
     if os.path.exists(filename): # if filtered dataset txt file for that key already exists
         print(f"\nFiltered {key} text dataset exists and loading...")
@@ -145,8 +144,7 @@ def load_filtered_text(directory: str, key: str, uni_delim = "\0") -> List:
 #### loading saved cleaned tokens for test, train, validation sets
 
 # returns pytorch tensor of the cleaned tokens from specified file for the specified key
-def load_clean_tokens(directory: str, key: str) -> Tensor:
-    filename = directory + "/" + key + '_tokens_clean.pt'
+def load_clean_tokens(filename: str, key: str) -> Tensor:
     # check if the clean tokens txt file exists
     if os.path.exists(filename): # if clean tokens txt file for that key already exists
         print(f"\nClean {key} tokens pt file exists and loading...")
@@ -156,10 +154,12 @@ def load_clean_tokens(directory: str, key: str) -> Tensor:
         print(f"Finished loading clean {key} tokens")
         print(f"clean {key} tokens shape: ", loaded_tensor.shape)
         # for wikitext-103-raw-v1 dataset, shape of cleaned tokens (no padding, max sequence length is max_len=1024) is as follows:
-        # test = torch.Size([275, 1024]), train = torch.Size([115039, 1024]), validation = torch.Size([241, 1024])
+        # test = torch.Size([275, 1024]), train = torch.Size([115039, 1024]), validation = torch.Size([241, 1024]) -- before Feb 11, 2024
+        # on and after Feb 11, 2024, the sizes are (they are smaller because I cleaned the raw text better by removing extraneous symbols and deleting extra whitespace)
+        # test = torch.Size([252, 1024]), train = torch.Size([106878, 1024]), validation = torch.Size([222, 1024])
 
     else:
-        print(f"\nClean {key} tokens pt file does not exist and ending...")
+        print(f"\nClean {key} tokens pt file does not exist and exiting...")
         sys.exit()
         
     return loaded_tensor
@@ -234,17 +234,21 @@ def get_hl_model_info(model):
 
 #### constructing tokenized_datasets_pt for a specified key
 
-def get_tokenized_datasets_pt(keys: List[str], clean_token_dir: str, filtered_text_dir: str, max_length = 1024) -> Dict[str, Union[List[int], Tensor]]:
+def get_tokenized_datasets_pt(keys: List[str], clean_token_dir: str, clean_token_file_suffix: str, filtered_text_dir: str, filtered_text_file_suffix: str, max_length = 1024) -> Dict[str, Union[List[int], Tensor]]:
     print("\n### constructing tokenized_datasets_pt ###")
-
+    
     # tokenized_datasets_pt is dict structure {'test' : {}, 'train': {}, 'validation': {}}
     # and for each key of tokenized_datasets_pt, tokenized_datasets_pt[key] 
     # is dict of structure {'text': original text, 'input_ids': 2d pytorch tensor where each row is len max_len, i.e. max seqence length, 'attention_mask': 2d pytorch tensor, same shape as input_ids, where 1 means corresponding element of input_ids is real data, 0 means it's a padding token}
     #keys = ['train'] #["test", "train", "validation"]
     tokenized_datasets_pt = {}
     for key in keys:
+        filtered_key_text_dir_file = filtered_text_dir + "/" + key + filtered_text_file_suffix
+        clean_key_token_file = clean_token_dir+ '/' + key + clean_token_file_suffix
+
+
         print(f"getting text, input_ids, and attention_mask for {key}")
-        key_clean_tokens = load_clean_tokens(clean_token_dir, key)
+        key_clean_tokens = load_clean_tokens(clean_key_token_file, key)
 
         # check to make sure the max sequence length is set properly
         if max_length!= key_clean_tokens.shape[1]:
@@ -252,7 +256,7 @@ def get_tokenized_datasets_pt(keys: List[str], clean_token_dir: str, filtered_te
             key_clean_tokens = key_clean_tokens.view(-1,max_length)
             print("finished reshaping token tensor")
 
-        tokenized_datasets_pt[key] = {'text': load_filtered_text(filtered_text_dir, key), 'input_ids': key_clean_tokens, 'attention_mask': torch.ones_like(key_clean_tokens)}
+        tokenized_datasets_pt[key] = {'text': load_filtered_text(filtered_key_text_dir_file, key), 'input_ids': key_clean_tokens, 'attention_mask': torch.ones_like(key_clean_tokens)}
         # attention_mask is all 1s here because we don't use any padding in the tokenization (we just throw away the tail)
 
     print("\n### finished constructing tokenized_datasets_pt ###")
