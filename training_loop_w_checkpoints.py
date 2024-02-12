@@ -20,8 +20,8 @@ print("\n### defining variables ###")
 #### variables
 batch_size = 8 # adjust based on GPU memory
 epochs = 6 # number of training epochs
-learning_rate = 5e-3
-batch_max = 400 #3300 # use None if want to run on all batches
+learning_rate = 3e-4
+batch_max = 1600 #3300 # use None if want to run on all batches
 
 max_len = 1024 # maximum sequence length, should be no larger than max context window of model (for gpt2, this is 1024)
 
@@ -186,12 +186,10 @@ for epoch in range(start_epoch, epochs):
             # only need to move to device if I'm not using DataParallel
             #input_ids, attention_mask = [item.to(device) for item in batch]
             
-            input_ids, attention_mask = [item for item in batch]
+            input_ids, attention_mask = [item.to(device) for item in batch]
             input_ids = input_ids.long()
             attention_mask = attention_mask.long()
 
-            input_ids.to(device)
-            attention_mask.to(device)
             log_ram_usage()
 
             #print("input_ids.shape: ", input_ids.shape) 
@@ -289,18 +287,12 @@ for epoch in range(start_epoch, epochs):
     total_eval_loss = 0
     with torch.no_grad():
         for batch in tqdm(dataloader['validation'], desc=f"batch loop for validation at epoch {epoch}/{epochs} (0-indexed)"):
-            input_ids, attention_mask = [item for item in batch]
+            input_ids, attention_mask = [item.to(device) for item in batch]
             input_ids = input_ids.long()
             attention_mask = attention_mask.long()
 
-            input_ids.to(device)
-            attention_mask.to(device)
             log_ram_usage()
 
-            #labels = torch.cat((input_ids[:, 1:], torch.tensor([[-100]] * input_ids.size(0))), dim=1)
-
-            #labels = labels.long() 
-            #labels.to(device)
             log_ram_usage()
 
             outputs = model(input_ids=input_ids, attention_mask=attention_mask, labels = input_ids)
@@ -409,16 +401,15 @@ print(tokenizer.decode(outputs[0], skip_special_tokens=True))
 
 #### testing on test set
 print("\ntesting on test set")
+model.to(device)
+print("device for test: ", device)
 model.eval()
 total_test_loss = 0
 with torch.no_grad():
     for batch in tqdm(dataloader['test'], desc=f"batch loop for test"):
-        input_ids, attention_mask = [item for item in batch]
+        input_ids, attention_mask = [item.to(device) for item in batch]
         input_ids = input_ids.long()
         attention_mask = attention_mask.long()
-
-        input_ids.to(device)
-        attention_mask.to(device)
 
         log_ram_usage()
 
