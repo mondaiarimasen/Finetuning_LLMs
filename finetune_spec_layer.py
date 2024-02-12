@@ -11,29 +11,33 @@ import torch.nn as nn
 from common_utils import *
 
 
-get_cuda_info()
+device = get_cuda_info()
+
 
 #sys.exit()
 
 print("\n### defining variables ###")
 #### variables
 batch_size = 4 # adjust based on GPU memory
-epochs = 20 # number of training epochs
-learning_rate = 3e-5
-batch_max = 2 #3300 # use None if want to run on all batches
+epochs = 6 # number of training epochs
+learning_rate = 3e-4
+batch_max = 400 #3300 # use None if want to run on all batches
+
+max_len = 1024 # maximum sequence length, should be no larger than max context window of model (for gpt2, this is 1024)
+
+suffix = "-bs-" + str(batch_size) + "-e-" + str(epochs) + "-lr-" + format(learning_rate, '.0e') + "-bm-" + str(batch_max) + "-ml-" + str(max_len)
 
 start_epoch = 0
-
-suffix = "-bs-" + str(batch_size) + "-e-" + str(epochs) + "-lr-" + format(learning_rate, '.0e') + "-bm-" + str(batch_max)
+layers_to_finetune = [-1]
 
 wandb_run_name = "training_loop" + suffix
 wandb_project = "gpt-2-finetuning"
-wandb_on = False
+wandb_resume = False
+wandb_on_bool = True
 
-
-model_path = "./my_finetuned_gpt2" + suffix
-
-max_len = 1024 # maximum sequence length, should be no larger than max context window of model (for gpt2, this is 1024)
+model_name = 'gpt2'
+model_path = "./my_finetuned_" + model_name + suffix
+save_model_bool = False
 
 # uni_delim = "\0" # a unique delimiter to save and load filtered text from dataset
 # Here we use "\0" (null character) as it's unlikely to be in the text
@@ -42,14 +46,26 @@ home_dir = os.getcwd()
 dataset_config = 'wikitext-103-v1'
 
 checkpoint_dir = 'checkpoints' + suffix
+num_checkpoint = 1 # default is 5
+
+#### filtered text directory for test, train, validation sets
+filtered_text_dir = home_dir + "/" + dataset_config + "-filtered-text-lists"
+filtered_text_file_suffix = "_text_filtered.txt"
+
+#### clean token dir for test, train, validation sets
+clean_token_dir = home_dir + "/" + dataset_config + "-" + model_name + "-tokenizer-clean-tokens-pt"
+clean_token_file_suffix = '_tokens_clean.pt'
+
+
+
 ####
 
 #### checkpoints setup
-checkpoints_queue = init_checkpoints_dir_queue(checkpoint_dir)
+init_checkpoints_dir(checkpoint_dir)
 
 #### wandb setup
-if wandb_on:
-    init_wandb(wandb_project, wandb_run_name)
+if wandb_on_bool:
+    init_wandb(wandb_project, wandb_run_name, wandb_resume)
 #### finished wandb setup
 
 
@@ -67,7 +83,6 @@ print("suffix: ", suffix)
 
 print("\n### now loading gpt2 model and tokenizer ### ")
 # now load the pre-trained gpt2 model and tokenizer
-model_name = 'gpt2'
 model = GPT2LMHeadModel.from_pretrained(model_name)
 tokenizer = GPT2Tokenizer.from_pretrained(model_name) # gpt2 specific tokenizer
 tokenizer_name = 'gpt2-tokenizer'
@@ -76,25 +91,20 @@ tokenizer_name = 'gpt2-tokenizer'
 tokenizer.pad_token = tokenizer.eos_token
 
 get_hl_model_info(model) # I have 124439808 parameters (124M), so this is the gpt2-small
+model.to(device)
 
 #### finished loading model
 
 
-#### filtered text directory for test, train, validation sets
-filtered_text_dir = home_dir + "/" + dataset_config + "-" + model_name + "-filtered-text-lists"
-
-#### clean token dir for test, train, validation sets
-clean_token_dir = home_dir + "/" + dataset_config + "-" + model_name + "-tokenizer-clean-tokens-pt"
-
 #### 
-test_lst = load_filtered_text(filtered_text_dir, "test")
-test_tokens = load_clean_tokens(clean_token_dir, "test")
+test_lst = load_filtered_text(filtered_text_dir + "/test" + filtered_text_file_suffix, "test")
+test_tokens = load_clean_tokens(clean_token_dir + "/test" + clean_token_file_suffix, "test")
 ####
 
 #### constructing tokenized_datasets_pt
 
-keys = ['train', 'validation']
-tokenized_datasets_pt = get_tokenized_datasets_pt(keys, clean_token_dir, filtered_text_dir)
+keys = ['train', 'validation', 'test']
+tokenized_datasets_pt = get_tokenized_datasets_pt(keys, clean_token_dir, clean_token_file_suffix, filtered_text_dir, filtered_text_file_suffix, max_length = max_len)
 # tokenized_datasets_pt is dict structure {'test' : {}, 'train': {}, 'validation': {}}
 # and for each key of tokenized_datasets_pt, tokenized_datasets_pt[key] 
 # is dict of structure {'text': original text, 'input_ids': 2d pytorch tensor where each row is len max_len, i.e. max seqence length, 'attention_mask': 2d pytorch tensor, same shape as input_ids, where 1 means corresponding element of input_ids is real data, 0 means it's a padding token}
@@ -123,24 +133,34 @@ optimizer = AdamW(model.parameters(), lr = learning_rate)
 print("\nlearning rate: ", learning_rate)
 
 
+get_cuda_info()
+torch.cuda.empty_cache()
+print("emptied cuda cache")
+
+os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True'
 
 # load latest checkpoint
-checkpoint = load_latest_checkpoint(checkpoint_dir)
+checkpoint = load_latest_checkpoint(checkpoint_dir, device)
 if checkpoint:
+    print("\ncheckpoint exists and loading")
     start_epoch = checkpoint['next_epoch']
     model.load_state_dict(checkpoint['model_state_dict'])
     optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+    print("finished loading from checkpoint")
+# if no checkpoint exists, then it uses the default settings
+
+
+# after load from checkpoint, freeze all layers you don't want to finetune
+if layers_to_finetune:
+    unfreeze_spec_layers(model, layers_to_finetune)
+    # Define an optimizer for the unfrozen parameters
+    optimizer = AdamW(filter(lambda p: p.requires_grad, model.parameters()), lr=learning_rate)
 
 
 
+# after load from checkpoint and freezing all necessary layers, make it a dataparallel object if necessary
+model = use_more_gpus_in_parallel(model)
 
-get_cuda_info()
-
-
-
-model, device = use_more_gpus_in_parallel(model)
-
-model.to(device) # move model to device
 
 len_dataloader_train = len(dataloader['train'])
 print("len_dataloader_train: ", len_dataloader_train)
@@ -148,69 +168,50 @@ print("len_dataloader_train: ", len_dataloader_train)
 len_dataloader_validation = len(dataloader['validation'])
 print("len_dataloader_validation: ", len_dataloader_validation)
 
+len_dataloader_test = len(dataloader['test'])
+print("len_dataloader_test: ", len_dataloader_test)
+
+
 batch_max = batch_max if batch_max is not None else len_dataloader_train
 
 model.train() # tell model it's in training mode
-
+epochs = 2*epochs
 # training loop
 for epoch in range(start_epoch, epochs):
     log_ram_usage()
     total_loss = 0
     batch_num = 1
     #print("\nbatch_num: ", batch_num)
-    for batch in tqdm(dataloader['train'], desc=f"batch loop for train at epoch {epoch+1}/{epochs}"):
+    print("\n")
+    for batch in tqdm(dataloader['train'], desc=f"batch loop for train at epoch {epoch}/{epochs} (0-indexed)"):
         log_ram_usage()
         #print("in batch loop before if")
         if batch_num <= batch_max:
         
-            #if batch_num == 1:
-            #   print("in batch loop")
-            
-            # only need to move to device if I'm not using DataParallel
-            #input_ids, attention_mask = [item.to(device) for item in batch]
-            
-            input_ids, attention_mask = [item for item in batch]
+            input_ids, attention_mask = [item.to(device) for item in batch]
             input_ids = input_ids.long()
             attention_mask = attention_mask.long()
 
             log_ram_usage()
 
-            #print("input_ids.shape: ", input_ids.shape) 
-            #print("type(input_ids): ", type(input_ids))
-            #print("input_ids.dtype: ", input_ids.dtype)
+            # labels is same as the tensor of token indices (input_ids); 
+            # model automatically shifts the position so you don't need to worry about it
             
-            #print("computing labels")
-            labels = torch.cat((input_ids[:, 1:], torch.tensor([[-100]] * input_ids.size(0))), dim=1)
-            # labels is the tensor of token indices (input_ids) shifted by 
-            # one position to the left, with -100 appended to the end of 
-            # each sequence to signal that there is no prediction to be made for the last token.
-            # -100 is used because this is the ignore_index of cross entropy loss function (which is what outputs.loss computes) 
-            # so any target label with the value -100 will not contribute to the loss, see https://pytorch.org/docs/stable/generated/torch.nn.CrossEntropyLoss.html
-
             # need to make sure the tensors being passed into embedding 
             # layer are long or ints since in PyTorch, embedding layers 
             # are used to retrieve embeddings from an embedding matrix, 
             # and they require the indices to be integers because these 
             # indices are used to look up specific rows in the embedding matrix. 
-            labels = labels.long() 
-            
             log_ram_usage()
             #print("feeding into model")
-            
+        
             # (overall idea: model performs a forward pass with the given inputs and calculates the loss
             # using the provided labels (which are input ids))
             # according to wandb, the following line takes around 20G RAM to run
-            outputs = model(input_ids=input_ids, attention_mask=attention_mask, labels = labels)
+            outputs = model(input_ids=input_ids, attention_mask=attention_mask, labels = input_ids)
             log_ram_usage()
 
-            # output from model is a complex object containing various items, one of which is the loss,
-            # representing how far off the model's predictions were from the actual values (the labels)
-            #print("computing outputs.loss")
             loss = outputs.loss
-
-            # checking loss shape since it might be a vector of length the number of gpus i'm using
-            #print("loss.shape: ", loss.shape)
-            #print("loss: ", loss)
 
             #print("taking mean of outputs if outputs.ndim>0, else just returning outputs")
             loss = loss.mean() if loss.ndim > 0 else loss
@@ -222,6 +223,7 @@ for epoch in range(start_epoch, epochs):
             #print("doing backpropagation")
             loss.backward()
             log_ram_usage()
+
             # optimizer updates the weights based on the gradients calculated during backpropagation
             #print("updating weights using optimizer")
             optimizer.step()
@@ -233,9 +235,6 @@ for epoch in range(start_epoch, epochs):
             batch_num+=1
             #wandb.log({"epoch": epoch, "loss": loss.item()})
 
-            #else:
-            #    print("breaking out of batch loop on batch ", batch_num)
-            #    break
         else:
             print(f"reached batch_max of {batch_max}")
             break
@@ -246,7 +245,7 @@ for epoch in range(start_epoch, epochs):
     safe_wandb_log({"avg_train_loss": avg_train_loss})
 
 
-    print(f"Epoch {epoch+1}/{epochs}, avg train loss: {avg_train_loss}")
+    print(f"Epoch {epoch}/{epochs}, avg train loss: {avg_train_loss}")
     safe_wandb_log({"epoch": epoch}) 
 
 
@@ -255,19 +254,16 @@ for epoch in range(start_epoch, epochs):
     model.eval()
     total_eval_loss = 0
     with torch.no_grad():
-        for batch in tqdm(dataloader['validation'], desc=f"batch loop for validation at epoch {epoch+1}/{epochs}"):
-            input_ids, attention_mask = [item for item in batch]
+        for batch in tqdm(dataloader['validation'], desc=f"batch loop for validation at epoch {epoch}/{epochs} (0-indexed)"):
+            input_ids, attention_mask = [item.to(device) for item in batch]
             input_ids = input_ids.long()
             attention_mask = attention_mask.long()
 
             log_ram_usage()
 
-            labels = torch.cat((input_ids[:, 1:], torch.tensor([[-100]] * input_ids.size(0))), dim=1)
-
-            labels = labels.long() 
             log_ram_usage()
 
-            outputs = model(input_ids=input_ids, attention_mask=attention_mask, labels = labels)
+            outputs = model(input_ids=input_ids, attention_mask=attention_mask, labels = input_ids)
             loss = outputs.loss
             
             #print("taking mean of outputs if outputs.ndim>0, else just returning outputs")
@@ -279,12 +275,12 @@ for epoch in range(start_epoch, epochs):
     
     # Calculate average loss over the validation data
     avg_val_loss = total_eval_loss / len_dataloader_validation
-    print(f'Epoch {epoch+1} validation loss: {avg_val_loss}')
+    print(f'Epoch {epoch} validation loss: {avg_val_loss}')
     safe_wandb_log({"avg_val_loss": avg_val_loss}) 
 
     # Calculate the perplexity based on the mean validation loss
     validation_perplexity = torch.exp(torch.tensor(avg_val_loss))
-    print(f'Epoch {epoch+1} validation perplexity: {validation_perplexity}')
+    print(f'Epoch {epoch} validation perplexity: {validation_perplexity}')
     safe_wandb_log({"validation perplexity": validation_perplexity}) 
 
 
@@ -294,15 +290,17 @@ for epoch in range(start_epoch, epochs):
     # Additional information you might want to save with the model
     checkpoint_dict_to_save = {
         'next_epoch': epoch+1,
-        'model_state_dict': model.state_dict(),
+        'model_state_dict': model.module.state_dict() if isinstance(model, nn.DataParallel) else model.state_dict(),
         'optimizer_state_dict': optimizer.state_dict(),
+        'avg_train_loss': avg_train_loss,
+        'avg_val_loss': avg_val_loss,
         # Include any other data you need to resume training
     }
 
     # Save the checkpoint
     checkpoint_path = os.path.join(checkpoint_dir, f'checkpoint_{epoch:04d}.pt')
-    save_checkpoint(checkpoint_dict_to_save, checkpoint_path, checkpoints_queue, num_checkpoint = 10)
-    print(f"epoch {epoch} and checkpoint queue is {checkpoints_queue}")
+    save_checkpoint(checkpoint_dict_to_save, checkpoint_path, num_checkpoint = num_checkpoint)
+    print(f"epoch {epoch} and checkpoint files are {get_all_checkpoints(checkpoint_dir)}")
     
 
 
@@ -325,17 +323,8 @@ print("-----finished training and validation-----")
 # model.save_pretrained('/content/drive/My Drive/my_finetuned_model')
 # tokenizer.save_pretrained('/content/drive/My Drive/my_finetuned_model')
 
-print("\nchecking if model is a DataParallel object")
-# Check if the model is a DataParallel object
-if isinstance(model, nn.DataParallel):
-    print("it is, so saving with model.module.save_pretrained(model_path)")
-    # If it is, save using the .module attribute
-    model.module.save_pretrained(model_path)
-else:
-    print("it's not, so saving with model.save_pretrained(model_path)")
-    # If it's not, save it directly
-    model.save_pretrained(model_path)
-print("finished saving")
+if save_model_bool: 
+    save_finetuned_model(model, model_path)
 
 #tokenizer.save_pretrained(model_path) # don't need to save tokenizer because it's unchanged
 
@@ -375,6 +364,51 @@ outputs = model.generate(
 
 print("Generated text:")
 print(tokenizer.decode(outputs[0], skip_special_tokens=True))
+
+
+
+#### testing on test set
+print("\ntesting on test set")
+model.to(device)
+print("device for test: ", device)
+model.eval()
+total_test_loss = 0
+with torch.no_grad():
+    for batch in tqdm(dataloader['test'], desc=f"batch loop for test"):
+        input_ids, attention_mask = [item.to(device) for item in batch]
+        input_ids = input_ids.long()
+        attention_mask = attention_mask.long()
+
+        log_ram_usage()
+
+        outputs = model(input_ids=input_ids, attention_mask=attention_mask, labels = input_ids)
+        loss = outputs.loss
+        
+        #print("taking mean of outputs if outputs.ndim>0, else just returning outputs")
+        loss = loss.mean() if loss.ndim > 0 else loss
+
+        total_test_loss += loss.item()
+
+        log_ram_usage()
+
+# Calculate average loss over the validation data
+avg_test_loss = total_test_loss / len_dataloader_test
+print(f'test loss: {avg_test_loss}')
+safe_wandb_log({"avg_test_loss": avg_test_loss}) 
+
+# Calculate the perplexity based on the mean validation loss
+test_perplexity = torch.exp(torch.tensor(avg_test_loss))
+print(f'Test perplexity: {test_perplexity}')
+safe_wandb_log({"test perplexity": test_perplexity}) 
+
+
+
+
+
+
+
+
+
 
 
 
@@ -421,49 +455,6 @@ for parameter in model.transformer.h[-1].parameters():  # Unfreeze the last laye
 # model.transformer.h = torch.nn.ModuleList(list(model.transformer.h) + [custom_layer])
 
 # one would add this before the training loop if you wanted to train the last layer
-
-
-########## possible code to freeze other layers and fine tune specific layer
-
-from transformers import GPT2Model, GPT2Tokenizer, AdamW
-import torch
-
-# Load GPT-2 model
-model = GPT2Model.from_pretrained('gpt2')
-
-# Freeze all parameters
-for param in model.parameters():
-    param.requires_grad = False
-
-# Unfreeze specific layer(s)
-# Example: Unfreeze the parameters of the last layer
-for param in model.h[-1].parameters():
-    param.requires_grad = True
-
-# Define an optimizer for the unfrozen parameters
-optimizer = AdamW(filter(lambda p: p.requires_grad, model.parameters()), lr=1e-5)
-
-# Define a loss function if necessary
-# For GPT-2, you might be working with a language modeling loss, like CrossEntropyLoss
-
-# Training loop (simplified)
-for epoch in range(num_epochs):
-    for batch in train_dataloader:
-        inputs = batch['input_ids']
-        labels = batch['labels']  # Assuming you have prepared labels
-
-        # Forward pass
-        outputs = model(inputs, labels=labels)
-        loss = outputs.loss
-
-        # Backward pass and optimize
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
-
-        print(f"Epoch {epoch}, Loss: {loss.item()}")
-
-
 
 
 

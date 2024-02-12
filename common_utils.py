@@ -356,6 +356,31 @@ def save_finetuned_model(model, model_path: str):
     print("finished saving")
 
 
+#### unfreeze only specified layers, and freeze other layers
+def unfreeze_spec_layers(model, layers_to_unfreeze: List[int]) -> None:
+    # Freeze all parameters
+    print(f"\nfreezing all parameters model")
+    for param in model.parameters():
+        param.requires_grad = False
+    print(f"\nfinished freezing all parameters model")
+
+
+    num_layers = model.config.n_layer
+    for layer in layers_to_unfreeze:
+        if -num_layers <= layer < num_layers:
+            print(f"\nunfreezing parameters in layer {layer} of model")
+
+            # Unfreeze specific layer(s)
+            # Example: Unfreeze the parameters of the last layer
+            for param in model.h[layer].parameters():
+                param.requires_grad = True 
+            print(f"\nfinished unfreezing parameters in layer {layer} of model")
+        else:
+            print(f"trying to unfreeze layer {layer} that doesn't exist in model's total of {num_layers} layers")
+            print("Exiting...")
+            sys.exit()
+
+
 
 
 
