@@ -155,6 +155,7 @@ if layers_to_finetune:
     unfreeze_spec_layers(model, layers_to_finetune)
     # Define an optimizer for the unfrozen parameters
     optimizer = AdamW(filter(lambda p: p.requires_grad, model.parameters()), lr=learning_rate)
+    print("finished defining optimizer for unfrozen parameters")
 
 
 
@@ -168,14 +169,11 @@ print("len_dataloader_train: ", len_dataloader_train)
 len_dataloader_validation = len(dataloader['validation'])
 print("len_dataloader_validation: ", len_dataloader_validation)
 
-len_dataloader_test = len(dataloader['test'])
-print("len_dataloader_test: ", len_dataloader_test)
-
 
 batch_max = batch_max if batch_max is not None else len_dataloader_train
 
 model.train() # tell model it's in training mode
-epochs = 2*epochs
+epochs = 2*epochs # to be able to continue the finetuning without changing folder names, etc
 # training loop
 for epoch in range(start_epoch, epochs):
     log_ram_usage()
@@ -366,42 +364,8 @@ print("Generated text:")
 print(tokenizer.decode(outputs[0], skip_special_tokens=True))
 
 
-
-#### testing on test set
-print("\ntesting on test set")
-model.to(device)
-print("device for test: ", device)
-model.eval()
-total_test_loss = 0
-with torch.no_grad():
-    for batch in tqdm(dataloader['test'], desc=f"batch loop for test"):
-        input_ids, attention_mask = [item.to(device) for item in batch]
-        input_ids = input_ids.long()
-        attention_mask = attention_mask.long()
-
-        log_ram_usage()
-
-        outputs = model(input_ids=input_ids, attention_mask=attention_mask, labels = input_ids)
-        loss = outputs.loss
-        
-        #print("taking mean of outputs if outputs.ndim>0, else just returning outputs")
-        loss = loss.mean() if loss.ndim > 0 else loss
-
-        total_test_loss += loss.item()
-
-        log_ram_usage()
-
-# Calculate average loss over the validation data
-avg_test_loss = total_test_loss / len_dataloader_test
-print(f'test loss: {avg_test_loss}')
-safe_wandb_log({"avg_test_loss": avg_test_loss}) 
-
-# Calculate the perplexity based on the mean validation loss
-test_perplexity = torch.exp(torch.tensor(avg_test_loss))
-print(f'Test perplexity: {test_perplexity}')
-safe_wandb_log({"test perplexity": test_perplexity}) 
-
-
+#### evaluate on test set
+eval_test_set(model, device, dataloader)
 
 
 

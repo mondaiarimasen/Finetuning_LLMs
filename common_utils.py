@@ -231,6 +231,8 @@ def get_hl_model_info(model):
     print(f"Vocabulary size: {config.vocab_size}")
     print(f"Total parameters: {model.num_parameters()}")
 
+    print("this is model: ", model)
+
 
 #### constructing tokenized_datasets_pt for a specified key
 
@@ -364,21 +366,74 @@ def unfreeze_spec_layers(model, layers_to_unfreeze: List[int]) -> None:
         param.requires_grad = False
     print(f"\nfinished freezing all parameters model")
 
+    print("this is model: ", model)
 
     num_layers = model.config.n_layer
     for layer in layers_to_unfreeze:
         if -num_layers <= layer < num_layers:
             print(f"\nunfreezing parameters in layer {layer} of model")
 
-            # Unfreeze specific layer(s)
-            # Example: Unfreeze the parameters of the last layer
-            for param in model.h[layer].parameters():
-                param.requires_grad = True 
-            print(f"\nfinished unfreezing parameters in layer {layer} of model")
+            # Unfreeze the specific layers
+        
+            for param in model.transformer.h[layer].parameters():
+                param.requires_grad = True
+
+            print(f"finished unfreezing parameters in layer {layer} of model")
+            
         else:
             print(f"trying to unfreeze layer {layer} that doesn't exist in model's total of {num_layers} layers")
             print("Exiting...")
             sys.exit()
+
+    
+    print(f"confirming the unfreezing...")
+    # Confirm the unfreezing (optional)
+    for layer_idx, layer in enumerate(model.transformer.h):
+        for param in layer.parameters():
+            print(f"Layer {layer_idx} - {param} requires_grad: {param.requires_grad}")
+
+
+
+
+
+#### testing loop
+
+
+def eval_test_set(model, device, dataloader):
+    #### testing on test set
+    print("\ntesting on test set")
+    model.to(device)
+    print("device for test: ", device)
+    model.eval()
+    total_test_loss = 0
+    len_dataloader_test = len(dataloader['test'])
+    with torch.no_grad():
+        for batch in tqdm(dataloader['test'], desc=f"batch loop for test"):
+            input_ids, attention_mask = [item.to(device) for item in batch]
+            input_ids = input_ids.long()
+            attention_mask = attention_mask.long()
+
+            log_ram_usage()
+
+            outputs = model(input_ids=input_ids, attention_mask=attention_mask, labels = input_ids)
+            loss = outputs.loss
+            
+            #print("taking mean of outputs if outputs.ndim>0, else just returning outputs")
+            loss = loss.mean() if loss.ndim > 0 else loss
+
+            total_test_loss += loss.item()
+
+            log_ram_usage()
+
+    # Calculate average loss over the validation data
+    avg_test_loss = total_test_loss / len_dataloader_test
+    print(f'test loss: {avg_test_loss}')
+    safe_wandb_log({"avg_test_loss": avg_test_loss}) 
+
+    # Calculate the perplexity based on the mean validation loss
+    test_perplexity = torch.exp(torch.tensor(avg_test_loss))
+    print(f'Test perplexity: {test_perplexity}')
+    safe_wandb_log({"test perplexity": test_perplexity}) 
 
 
 
