@@ -506,8 +506,14 @@ def draw_attention_map(model, tokenizer, device, input_text:str, layers: List[in
 
 
 #### function to generate text given prompt
-def generate_text(model, tokenizer, device, prompt:str, max_length = 100, num_beams = 5, num_return_sequences=5, 
-        early_stopping=True):
+def generate_text(model, tokenizer, device, prompt:str, max_length = 100, 
+                                                        num_beams = 5, 
+                                                        temperature = 0.9, 
+                                                        do_sample = True, # need to set it to True for temperature to have effect
+                                                        num_return_sequences=5, 
+                                                        early_stopping=True, 
+                                                        top_k=75, 
+                                                        no_repeat_ngram_size=6):
     # test fine-tuned model
     inputs = tokenizer.encode(prompt, return_tensors = 'pt').to(device)
     # Create an attention mask for the inputs
@@ -531,10 +537,14 @@ def generate_text(model, tokenizer, device, prompt:str, max_length = 100, num_be
             inputs, 
             attention_mask=attention_mask,
             pad_token_id=pad_token_id,
-            max_length=100, 
-            num_beams=5, 
-            num_return_sequences=5, 
-            early_stopping=True # Stop generating once max_length is reached
+            max_length=max_length, 
+            num_beams=num_beams, 
+            temperature = temperature,
+            do_sample = do_sample, # need to set it to True for temperature to have effect
+            num_return_sequences= num_return_sequences, 
+            early_stopping=early_stopping, # Stop generating once max_length is reached
+            top_k=top_k, 
+            no_repeat_ngram_size=no_repeat_ngram_size
         )
 
         # note that this max_length doesn't need to be the same as the max_len in the tokenization process of train data; they are independent
