@@ -2,12 +2,8 @@ import torch
 from transformers import GPT2LMHeadModel, GPT2Tokenizer, GPT2Config, get_linear_schedule_with_warmup
 from datasets import load_dataset, Dataset
 import os
-from tqdm import tqdm
 import pytz
-import sys
 from torch.optim import AdamW
-from typing import List
-import torch.nn as nn
 from common_utils import *
 
 
@@ -25,7 +21,7 @@ batch_max = 400 #3300 # use None if want to run on all batches
 
 max_len = 1024 # maximum sequence length, should be no larger than max context window of model (for gpt2, this is 1024)
 
-suffix = "-bs-" + str(batch_size) + "-e-" + str(epochs) + "-lr-" + format(learning_rate, '.0e') + "-bm-" + str(batch_max) + "-ml-" + str(max_len)
+suffix = "-bs-" + str(batch_size) + "-e-" + str(epochs) + "-lr-" + format(learning_rate, '.0e') + "-bm-" + str(batch_max) + "-ml-" + str(max_len) + "-trft--1l"
 
 start_epoch = 0
 layers_to_finetune = [-1]
@@ -145,7 +141,8 @@ if checkpoint:
     print("\ncheckpoint exists and loading")
     start_epoch = checkpoint['next_epoch']
     model.load_state_dict(checkpoint['model_state_dict'])
-    optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+    if not layers_to_finetune:
+        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
     print("finished loading from checkpoint")
 # if no checkpoint exists, then it uses the default settings
 

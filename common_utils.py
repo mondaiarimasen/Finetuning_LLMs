@@ -11,6 +11,7 @@ from torch.utils.data import DataLoader, TensorDataset
 import math
 from collections import deque
 from glob import glob
+from tqdm import tqdm
 
 
 
@@ -385,12 +386,19 @@ def unfreeze_spec_layers(model, layers_to_unfreeze: List[int]) -> None:
             print("Exiting...")
             sys.exit()
 
-    
+    # convert to ints between 0 and num_layers -1 since we will be looking up layers later
+    layers_to_unfreeze = [s % num_layers for s in layers_to_unfreeze]
+
     print(f"confirming the unfreezing...")
     # Confirm the unfreezing (optional)
     for layer_idx, layer in enumerate(model.transformer.h):
         for param in layer.parameters():
-            print(f"Layer {layer_idx} - {param} requires_grad: {param.requires_grad}")
+            if param.requires_grad and layer_idx not in layers_to_unfreeze:
+                print("unfreezing failed")
+                print(f"Layer {layer_idx} - requires_grad: {param.requires_grad} but this layer is not in {layers_to_unfreeze}")
+                print("exiting")
+                sys.exit()
+    print("finished confirming the unfreezing, no problems")
 
 
 
