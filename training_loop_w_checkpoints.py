@@ -18,7 +18,7 @@ device = get_cuda_info()
 
 print("\n### defining variables ###")
 #### variables
-batch_size = 4 # adjust based on GPU memory
+batch_size = 8 # adjust based on GPU memory
 epochs = 6 # number of training epochs
 learning_rate = 3e-4
 batch_max = 800 #3300 # use None if want to run on all batches
@@ -48,7 +48,7 @@ checkpoint_dir = 'checkpoints' + suffix
 num_checkpoint = 2 # default is 5
 
 #### filtered text directory for test, train, validation sets
-filtered_text_dir = home_dir + "/" + dataset_config + "-" + model_name + "-filtered-text-lists"
+filtered_text_dir = home_dir + "/" + dataset_config + "-filtered-text-lists"
 filtered_text_file_suffix = "_text_filtered.txt"
 
 #### clean token dir for test, train, validation sets
@@ -96,8 +96,8 @@ model.to(device)
 
 
 #### 
-test_lst = load_filtered_text(filtered_text_dir, "test")
-test_tokens = load_clean_tokens(clean_token_dir, "test")
+test_lst = load_filtered_text(filtered_text_dir + "/test" + filtered_text_file_suffix, "test")
+test_tokens = load_clean_tokens(clean_token_dir + "/test" + clean_token_file_suffix, "test")
 ####
 
 #### constructing tokenized_datasets_pt
@@ -195,7 +195,7 @@ for epoch in range(start_epoch, epochs):
             #print("input_ids.dtype: ", input_ids.dtype)
             
             #print("computing labels")
-            labels = torch.cat((input_ids[:, 1:], torch.tensor([[-100]] * input_ids.size(0))), dim=1)
+            #labels = torch.cat((input_ids[:, 1:], torch.tensor([[-100]] * input_ids.size(0))), dim=1)
             # labels is the tensor of token indices (input_ids) shifted by 
             # one position to the left, with -100 appended to the end of 
             # each sequence to signal that there is no prediction to be made for the last token.
@@ -207,15 +207,15 @@ for epoch in range(start_epoch, epochs):
             # are used to retrieve embeddings from an embedding matrix, 
             # and they require the indices to be integers because these 
             # indices are used to look up specific rows in the embedding matrix. 
-            labels = labels.long() 
-            labels.to(device)
+            #labels = labels.long() 
+            #labels.to(device)
             log_ram_usage()
             #print("feeding into model")
             
             # (overall idea: model performs a forward pass with the given inputs and calculates the loss
             # using the provided labels (which are input ids))
             # according to wandb, the following line takes around 20G RAM to run
-            outputs = model(input_ids=input_ids, attention_mask=attention_mask, labels = labels)
+            outputs = model(input_ids=input_ids, attention_mask=attention_mask, labels = input_ids)
             log_ram_usage()
 
             # output from model is a complex object containing various items, one of which is the loss,
@@ -293,13 +293,13 @@ for epoch in range(start_epoch, epochs):
             attention_mask.to(device)
             log_ram_usage()
 
-            labels = torch.cat((input_ids[:, 1:], torch.tensor([[-100]] * input_ids.size(0))), dim=1)
+            #labels = torch.cat((input_ids[:, 1:], torch.tensor([[-100]] * input_ids.size(0))), dim=1)
 
-            labels = labels.long() 
-            labels.to(device)
+            #labels = labels.long() 
+            #labels.to(device)
             log_ram_usage()
 
-            outputs = model(input_ids=input_ids, attention_mask=attention_mask, labels = labels)
+            outputs = model(input_ids=input_ids, attention_mask=attention_mask, labels = input_ids)
             loss = outputs.loss
             
             #print("taking mean of outputs if outputs.ndim>0, else just returning outputs")
