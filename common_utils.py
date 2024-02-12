@@ -12,7 +12,8 @@ import math
 from collections import deque
 from glob import glob
 from tqdm import tqdm
-
+import matplotlib.pyplot as plt
+import seaborn as sns
 
 
 #### checkpoints
@@ -445,7 +446,104 @@ def eval_test_set(model, device, dataloader):
 
 
 
+#### drawing attention maps of specified layer and head respectively 
+def draw_attention_map(model, tokenizer, device, input_text:str, layers: List[int], heads: List[int]):
+    
+    len_layer_lst = len(layers)
+    if len_layer_lst != len(heads):
+        print(f"layers and heads arrays are not equal length (lengths {len_layer_lst} and {len(heads)} respectively), cannot draw attention maps")
+        print("exiting...")
+        sys.exit()
+    
+    inputs = tokenizer(input_text, return_tensors="pt").to(device)
 
+    print("\nchecking if model is a DataParallel object")
+    # Check if the model is a DataParallel object
+    if isinstance(model, nn.DataParallel):
+        print("it is, so using model.module to generate")
+        # If it is, use model.module 
+        model = model.module    
+    else:
+        print("it's not, so using model to generate")
+    
+    model.eval()
+    with torch.no_grad():
+        outputs = model(**inputs, output_attentions = True)
+    
+    attentions = outputs.attentions  # This is a tuple of attention maps from all layers
+    
+
+    for i in range(len_layer_lst):
+        layer = layers[i]  # Selecting the first layer
+        head = heads[i]   # Selecting the first head
+        print("selecting attention now")
+        selected_attention = attentions[layer][0, head].detach().cpu().numpy()
+
+        # Convert input IDs to tokens
+        tokens = [tokenizer.decode([token]) for token in inputs['input_ids'][0]]
+
+
+        print(f"drawing attention map now for layer {layer} and head {head}")
+        # Use Seaborn to create a heatmap
+        plt.figure(figsize=(10, 8))
+        sns.heatmap(selected_attention, xticklabels=tokens, yticklabels=tokens, square=True, cmap='viridis')
+
+        plt.title(f"Attention Map - Layer {layer + 1}, Head {head + 1}")
+        plt.xlabel("Tokens")
+        plt.ylabel("Tokens")
+        # Reverse the order of the y-axis tick labels
+        #plt.gca().invert_yaxis()
+        plt.show()
+
+        # Save the figure
+        plt.savefig(f'attention_map_l{layer}_h{head}.png')
+
+        plt.close()
+
+
+    print("finished drawing attention maps")
+
+
+
+#### function to generate text given prompt
+def generate_text(model, tokenizer, device, prompt:str, max_length = 100, num_beams = 5, num_return_sequences=5, 
+        early_stopping=True):
+    # test fine-tuned model
+    inputs = tokenizer.encode(prompt, return_tensors = 'pt').to(device)
+    # Create an attention mask for the inputs
+    attention_mask = torch.ones(inputs.shape, dtype=torch.long, device=device)
+    # Set pad_token_id to the pad_token_id of the tokenizer
+    pad_token_id = tokenizer.pad_token_id
+
+    print("\nchecking if model is a DataParallel object")
+    # Check if the model is a DataParallel object
+    if isinstance(model, nn.DataParallel):
+        print("it is, so using model.module to generate")
+        # If it is, use model.module 
+        model = model.module    
+    else:
+        print("it's not, so using model to generate")
+
+    model.eval()
+    print("\ngenerating output")
+    with torch.no_grad():
+        outputs = model.generate(
+            inputs, 
+            attention_mask=attention_mask,
+            pad_token_id=pad_token_id,
+            max_length=100, 
+            num_beams=5, 
+            num_return_sequences=5, 
+            early_stopping=True # Stop generating once max_length is reached
+        )
+
+        # note that this max_length doesn't need to be the same as the max_len in the tokenization process of train data; they are independent
+        # the max_length here is just the max length of the generated sequence that I'm outputing here
+
+    print("\nGenerated text:")
+    gen_text = tokenizer.decode(outputs[0], skip_special_tokens=True)
+    print(gen_text)
+    return gen_text
 
 
 

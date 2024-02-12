@@ -29,7 +29,7 @@ layers_to_finetune = [-1]
 wandb_run_name = "training_loop" + suffix
 wandb_project = "gpt-2-finetuning"
 wandb_resume = False
-wandb_on_bool = True
+wandb_on_bool = False
 
 model_name = 'gpt2'
 model_path = "./my_finetuned_" + model_name + suffix
@@ -327,45 +327,23 @@ if save_model_bool:
 
 # test fine-tuned model
 prompt = "The mysteries of the universe are"
-inputs = tokenizer.encode(prompt, return_tensors = 'pt').to(device)
-# Create an attention mask for the inputs
-attention_mask = torch.ones(inputs.shape, dtype=torch.long, device=device)
-# Set pad_token_id to the pad_token_id of the tokenizer
-pad_token_id = tokenizer.pad_token_id
-
-
-print("\nchecking if model is a DataParallel object")
-# Check if the model is a DataParallel object
-if isinstance(model, nn.DataParallel):
-    print("it is, so using model.module to generate")
-    # If it is, use model.module 
-    model = model.module    
-else:
-    print("it's not, so using model to generate")
-
-print("\ngenerating output")
-outputs = model.generate(
-    inputs, 
-    attention_mask=attention_mask,
-    pad_token_id=pad_token_id,
-    max_length=100, 
-    num_beams=5, 
-    num_return_sequences=5, 
-    early_stopping=True # Stop generating once max_length is reached
-)
-
-# note that this max_length doesn't need to be the same as the max_len in the tokenization process of train data; they are independent
-# the max_length here is just the max length of the generated sequence that I'm outputing here
-
-print("Generated text:")
-print(tokenizer.decode(outputs[0], skip_special_tokens=True))
+generate_text(model, tokenizer, device, prompt, max_length = 100, num_beams = 5, num_return_sequences=5, early_stopping=True)
 
 
 #### evaluate on test set
 eval_test_set(model, device, dataloader)
 
 
+input_text = "Who are you looking at?"
+layers = [0,1,11]
+heads = [0,1,11]
+draw_attention_map(model, tokenizer, device, input_text, layers, heads)
 
+
+#input_text = prompt
+#layers = [0,1,11]
+#heads = [0,1,11]
+#draw_attention_map(model, tokenizer, device, input_text, layers, heads)
 
 
 
